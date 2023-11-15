@@ -1,18 +1,17 @@
 package net.dzikoysk.funnyguilds.listener.region;
 
-import net.dzikoysk.funnycommands.resources.ValidationException;
 import net.dzikoysk.funnyguilds.FunnyGuilds;
 import net.dzikoysk.funnyguilds.event.FunnyEvent.EventCause;
 import net.dzikoysk.funnyguilds.event.SimpleEventHandler;
 import net.dzikoysk.funnyguilds.event.guild.GuildHeartInteractEvent;
 import net.dzikoysk.funnyguilds.event.guild.GuildHeartInteractEvent.Click;
+import net.dzikoysk.funnyguilds.feature.command.InternalValidationException;
 import net.dzikoysk.funnyguilds.feature.command.user.InfoCommand;
 import net.dzikoysk.funnyguilds.feature.security.SecuritySystem;
 import net.dzikoysk.funnyguilds.feature.war.WarSystem;
 import net.dzikoysk.funnyguilds.guild.Guild;
 import net.dzikoysk.funnyguilds.guild.Region;
 import net.dzikoysk.funnyguilds.listener.AbstractFunnyListener;
-import net.dzikoysk.funnyguilds.shared.bukkit.ChatUtils;
 import net.dzikoysk.funnyguilds.user.User;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
@@ -53,7 +52,7 @@ public class PlayerInteract extends AbstractFunnyListener {
         Region region = regionOption.get();
         boolean returnMethod = region.getHeartBlock()
                 .filter(heart -> heart.equals(clicked))
-                .peek(heart -> this.handleHeartClick(player, eventAction, region, event))
+                .peek(heart -> this.handleHeartClick(player, eventAction, region.getGuild(), event))
                 .isPresent();
 
         if (returnMethod) {
@@ -76,15 +75,13 @@ public class PlayerInteract extends AbstractFunnyListener {
         }
     }
 
-    private void handleHeartClick(Player player, Action eventAction, Region region, Cancellable event) {
+    private void handleHeartClick(Player player, Action eventAction, Guild guild, Cancellable event) {
         event.setCancelled(true);
 
         Option<User> userOption = this.userManager.findByPlayer(player);
         if (userOption.isEmpty()) {
             return;
         }
-
-        Guild guild = region.getGuild();
         User user = userOption.get();
 
         GuildHeartInteractEvent interactEvent = new GuildHeartInteractEvent(EventCause.USER, user, guild,
@@ -107,8 +104,11 @@ public class PlayerInteract extends AbstractFunnyListener {
         try {
             this.infoExecutor.execute(player, new String[] {guild.getTag()});
         }
-        catch (ValidationException validatorException) {
-            validatorException.getValidationMessage().peek(message -> ChatUtils.sendMessage(player, message));
+        catch (InternalValidationException validatorException) {
+            this.messageService.getMessage(validatorException.getMessageSupplier())
+                    .with(validatorException.getReplacements())
+                    .receiver(player)
+                    .send();
         }
     }
 

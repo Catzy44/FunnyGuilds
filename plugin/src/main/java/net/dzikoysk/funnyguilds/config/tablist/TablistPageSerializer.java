@@ -18,36 +18,32 @@ public class TablistPageSerializer implements ObjectSerializer<TablistPage> {
     public void serialize(TablistPage page, SerializationData data, @NotNull GenericsDeclaration generics) {
         data.add("cycles", page.cycles);
 
-        if (page.playerList != null) {
-            data.addAsMap("player-list", page.playerList, Integer.class, String.class);
+        if (page.cells != null) {
+            data.addAsMap("cells", page.cells, Integer.class, String.class);
         }
 
-        if (page.playerListHeader != null) {
-            data.add("player-list-header", page.playerListHeader);
+        if (page.header != null) {
+            data.add("header", page.header);
         }
 
-        if (page.playerListFooter != null) {
-            data.add("player-list-footer", page.playerListFooter);
+        if (page.footer != null) {
+            data.add("footer", page.footer);
         }
     }
 
     @Override
     public TablistPage deserialize(DeserializationData data, @NotNull GenericsDeclaration generics) {
         int cycles = data.get("cycles", Integer.class);
-
-        Map<Integer, String> playerList = data.containsKey("player-list")
-                ? data.getAsMap("player-list", Integer.class, String.class)
+        Map<Integer, String> cells = data.containsKey("cells")
+                ? data.getAsMap("cells", Integer.class, String.class)
                 : null;
-
-        String playerListHeader = data.containsKey("player-list-header")
-                ? data.get("player-list-header", String.class)
+        String header = data.containsKey("header")
+                ? data.get("header", String.class)
                 : null;
-
-        String playerListFooter = data.containsKey("player-list-footer")
-                ? data.get("player-list-footer", String.class)
+        String footer = data.containsKey("footer")
+                ? data.get("footer", String.class)
                 : null;
-
-        return new TablistPage(cycles, playerList, playerListHeader, playerListFooter);
+        return new TablistPage(cycles, cells, header, footer);
     }
 
 }

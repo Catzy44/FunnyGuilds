@@ -1,11 +1,14 @@
 package net.dzikoysk.funnyguilds.feature.security;
 
-import java.util.Map;
+import com.google.common.cache.Cache;
+import dev.peri.yetanothermessageslibrary.replace.Replaceable;
+import dev.peri.yetanothermessageslibrary.replace.replacement.Replacement;
 import net.dzikoysk.funnyguilds.FunnyGuilds;
-import net.dzikoysk.funnyguilds.config.MessageConfiguration;
+import net.dzikoysk.funnyguilds.config.message.MessageService;
+import net.dzikoysk.funnyguilds.feature.security.cheat.CheatType;
 import net.dzikoysk.funnyguilds.shared.FunnyFormatter;
 import net.dzikoysk.funnyguilds.user.User;
-import org.bukkit.Bukkit;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 public final class SecurityUtils {
@@ -19,28 +22,31 @@ public final class SecurityUtils {
         return millisecond * COMPENSATION_RATIO;
     }
 
-    public static void sendToOperator(Player player, String cheat, String note) {
-        MessageConfiguration messages = FunnyGuilds.getInstance().getMessageConfiguration();
-        String message = messages.securitySystemPrefix + messages.securitySystemInfo;
-        String messageNote = messages.securitySystemPrefix + messages.securitySystemNote;
+    public static void sendToOperator(Player player, CheatType cheatType, Replaceable... noteReplacements) {
+        MessageService messageService = FunnyGuilds.getInstance().getMessageService();
 
         FunnyFormatter formatter = new FunnyFormatter()
                 .register("{PLAYER}", player.getName())
-                .register("{CHEAT}", cheat)
-                .register("{NOTE}", note);
+                .register("{CHEAT}", cheatType.getName());
 
-        Bukkit.broadcast(formatter.format(message), "funnyguilds.admin");
-        Bukkit.broadcast(formatter.format(messageNote), "funnyguilds.admin");
+        FunnyGuilds.getInstance().getMessageService().getMessage(config -> config.admin.securitySystem.info)
+                .broadcast()
+                .with(formatter)
+                .with(
+                        CommandSender.class,
+                        receiver -> Replacement.of("{NOTE}", messageService.get(receiver, cheatType.getNoteSupplier(), noteReplacements))
+                )
+                .permission("funnyguilds.admin")
+                .send();
     }
 
     public static void addViolationLevel(User user) {
-        Map<User, Integer> playersViolationLevel = SecuritySystem.getPlayersViolationLevel();
-        playersViolationLevel.put(user, playersViolationLevel.getOrDefault(user, 0) + 1);
-        Bukkit.getScheduler().runTaskLater(FunnyGuilds.getInstance(), () -> playersViolationLevel.remove(user), 18000);
+        Cache<User, Integer> playersViolationLevel = SecuritySystem.getPlayersViolationLevel();
+        playersViolationLevel.put(user, playersViolationLevel.asMap().getOrDefault(user, 0) + 1);
     }
 
     public static boolean isBlocked(User user) {
-        return SecuritySystem.getPlayersViolationLevel().getOrDefault(user, 0) > 1;
+        return SecuritySystem.getPlayersViolationLevel().asMap().getOrDefault(user, 0) >= FunnyGuilds.getInstance().getPluginConfiguration().securitySystem.maxViolations;
     }
 
 }

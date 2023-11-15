@@ -8,7 +8,6 @@ import net.dzikoysk.funnyguilds.feature.command.GuildValidation;
 import net.dzikoysk.funnyguilds.guild.Guild;
 import net.dzikoysk.funnyguilds.shared.FunnyFormatter;
 import net.dzikoysk.funnyguilds.user.User;
-
 import static net.dzikoysk.funnyguilds.feature.command.DefaultValidation.when;
 
 @FunnyComponent
@@ -25,20 +24,25 @@ public final class PvPCommand extends AbstractFunnyCommand {
     )
     public void execute(@CanManage User deputy, Guild guild, String[] args) {
         if (args.length > 0) {
-            when(!this.config.damageAlly, this.messages.generalAllyPvpDisabled);
+            when(!this.config.damageAlly, config -> config.guild.commands.pvp.allyPvPDisabled);
 
             Guild targetAlliedGuild = GuildValidation.requireGuildByTag(args[0]);
             FunnyFormatter guildTagFormatter = FunnyFormatter.of("{TAG}", targetAlliedGuild.getTag());
-            when(!guild.isAlly(targetAlliedGuild), guildTagFormatter.format(this.messages.allyDoesntExist));
+            when(!guild.isAlly(targetAlliedGuild), config -> config.guild.commands.validation.notAllied, guildTagFormatter);
 
             boolean newPvpValue = guild.toggleAllyPvP(targetAlliedGuild);
-            deputy.sendMessage(guildTagFormatter.format(newPvpValue ? this.messages.pvpAllyOn : this.messages.pvpAllyOff));
+            this.messageService.getMessage(config -> newPvpValue ? config.guild.commands.pvp.enabledAlly : config.guild.commands.pvp.disabledAlly)
+                    .receiver(deputy)
+                    .with(guildTagFormatter)
+                    .send();
 
             return;
         }
 
         boolean newPvpValue = guild.togglePvP();
-        deputy.sendMessage(newPvpValue ? this.messages.pvpOn : this.messages.pvpOff);
+        this.messageService.getMessage(config -> newPvpValue ? config.guild.commands.pvp.enabled : config.guild.commands.pvp.disabled)
+                .receiver(deputy)
+                .send();
     }
 
 }

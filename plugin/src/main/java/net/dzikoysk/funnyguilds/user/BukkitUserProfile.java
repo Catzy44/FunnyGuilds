@@ -5,9 +5,7 @@ import java.util.UUID;
 import net.dzikoysk.funnyguilds.feature.hooks.vault.VaultHook;
 import net.dzikoysk.funnyguilds.shared.FunnyStringUtils;
 import net.dzikoysk.funnyguilds.shared.Position;
-import net.dzikoysk.funnyguilds.shared.bukkit.ChatUtils;
 import net.dzikoysk.funnyguilds.shared.bukkit.FunnyServer;
-import net.dzikoysk.funnyguilds.shared.bukkit.NmsUtils;
 import net.dzikoysk.funnyguilds.shared.bukkit.PositionConverter;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
@@ -30,8 +28,7 @@ public class BukkitUserProfile implements UserProfile {
         this.playerRef = new WeakReference<>(funnyServer.getPlayer(uuid).orNull());
     }
 
-    //TODO: change visibility to private after removing deprecated methods from User
-    Option<Player> getPlayer() {
+    private Option<Player> getPlayer() {
         Player player = this.playerRef.get();
 
         if (player == null) {
@@ -77,16 +74,16 @@ public class BukkitUserProfile implements UserProfile {
 
     @Override
     public int getPing() {
-        return this.getPlayer().map(NmsUtils::getPing).orElseGet(0);
+        return this.getPlayer().map(Player::getPing).orElseGet(0);
     }
 
-    @Override //TODO: MiniMessage support
+    @Override
     public void sendMessage(String message) {
         if (FunnyStringUtils.isEmpty(message)) {
             return;
         }
 
-        this.getPlayer().peek(player -> ChatUtils.sendMessage(player, message));
+        this.getPlayer().peek(player -> player.sendMessage(message));
     }
 
     @Override

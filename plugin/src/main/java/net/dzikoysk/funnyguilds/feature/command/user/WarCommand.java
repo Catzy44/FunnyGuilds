@@ -2,16 +2,13 @@ package net.dzikoysk.funnyguilds.feature.command.user;
 
 import net.dzikoysk.funnycommands.stereotypes.FunnyCommand;
 import net.dzikoysk.funnycommands.stereotypes.FunnyComponent;
-import net.dzikoysk.funnyguilds.concurrency.ConcurrencyTask;
-import net.dzikoysk.funnyguilds.concurrency.ConcurrencyTaskBuilder;
-import net.dzikoysk.funnyguilds.concurrency.requests.prefix.PrefixUpdateGuildRequest;
 import net.dzikoysk.funnyguilds.feature.command.AbstractFunnyCommand;
 import net.dzikoysk.funnyguilds.feature.command.GuildValidation;
 import net.dzikoysk.funnyguilds.feature.command.IsOwner;
+import net.dzikoysk.funnyguilds.feature.scoreboard.ScoreboardGlobalUpdateUserSyncTask;
 import net.dzikoysk.funnyguilds.guild.Guild;
 import net.dzikoysk.funnyguilds.shared.FunnyFormatter;
 import net.dzikoysk.funnyguilds.user.User;
-
 import static net.dzikoysk.funnyguilds.feature.command.DefaultValidation.when;
 
 @FunnyComponent
@@ -27,7 +24,7 @@ public final class WarCommand extends AbstractFunnyCommand {
             playerOnly = true
     )
     public void execute(@IsOwner User owner, Guild guild, String[] args) {
-        when(args.length < 1, this.messages.enemyCorrectUse);
+        when(args.length < 1, config -> config.guild.commands.enemy.correctUsage);
         Guild enemyGuild = GuildValidation.requireGuildByTag(args[0]);
 
         FunnyFormatter formatter = new FunnyFormatter()
@@ -35,13 +32,16 @@ public final class WarCommand extends AbstractFunnyCommand {
                 .register("{TAG}", enemyGuild.getTag())
                 .register("{AMOUNT}", this.config.maxEnemiesBetweenGuilds);
 
-        when(guild.equals(enemyGuild), this.messages.enemySame);
-        when(guild.isAlly(enemyGuild), this.messages.enemyAlly);
-        when(guild.isEnemy(enemyGuild), this.messages.enemyAlready);
-        when(guild.getEnemies().size() >= this.config.maxEnemiesBetweenGuilds, formatter.format(this.messages.enemyMaxAmount));
+        when(guild.equals(enemyGuild), config -> config.guild.commands.enemy.yourGuild);
+        when(guild.isAlly(enemyGuild), config -> config.guild.commands.enemy.targetIsAlly);
+        when(guild.isEnemy(enemyGuild), config -> config.guild.commands.enemy.alreadyEnemy);
+        when(guild.getEnemies().size() >= this.config.maxEnemiesBetweenGuilds, config -> config.guild.commands.enemy.enemiesLimit, formatter);
 
         if (enemyGuild.getEnemies().size() >= this.config.maxEnemiesBetweenGuilds) {
-            owner.sendMessage(formatter.format(this.messages.enemyMaxTargetAmount));
+            this.messageService.getMessage(config -> config.guild.commands.enemy.targetEnemiesLimit)
+                    .receiver(owner)
+                    .with(formatter)
+                    .send();
             return;
         }
 
@@ -55,20 +55,19 @@ public final class WarCommand extends AbstractFunnyCommand {
                 .register("{GUILD}", guild.getName())
                 .register("{TAG}", guild.getTag());
 
-        owner.sendMessage(enemyFormatter.format(this.messages.enemyDone));
-        enemyGuild.getOwner().sendMessage(enemyIFormatter.format(this.messages.enemyIDone));
+        this.messageService.getMessage(config -> config.guild.commands.enemy.enemy)
+                .receiver(owner)
+                .with(enemyFormatter)
+                .send();
+        this.messageService.getMessage(config -> config.guild.commands.enemy.enemyTarget)
+                .receiver(enemyGuild.getOwner())
+                .with(enemyIFormatter)
+                .send();
 
-        ConcurrencyTaskBuilder taskBuilder = ConcurrencyTask.builder();
-
-        guild.getMembers().forEach(member -> {
-            taskBuilder.delegate(new PrefixUpdateGuildRequest(member, enemyGuild));
+        this.plugin.getIndividualNameTagManager().peek(manager -> {
+            guild.getMembers().forEach(member -> this.plugin.scheduleFunnyTasks(new ScoreboardGlobalUpdateUserSyncTask(manager, member)));
+            enemyGuild.getMembers().forEach(member -> this.plugin.scheduleFunnyTasks(new ScoreboardGlobalUpdateUserSyncTask(manager, member)));
         });
-
-        enemyGuild.getMembers().forEach(member -> {
-            taskBuilder.delegate(new PrefixUpdateGuildRequest(member, guild));
-        });
-
-        this.concurrencyManager.postTask(taskBuilder.build());
     }
 
 }

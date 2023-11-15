@@ -3,14 +3,11 @@ package net.dzikoysk.funnyguilds.feature.command.user;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
-import net.dzikoysk.funnycommands.resources.ValidationException;
 import net.dzikoysk.funnycommands.stereotypes.FunnyCommand;
 import net.dzikoysk.funnycommands.stereotypes.FunnyComponent;
-import net.dzikoysk.funnyguilds.concurrency.requests.database.DatabaseUpdateGuildRequest;
-import net.dzikoysk.funnyguilds.concurrency.requests.prefix.PrefixGlobalAddGuildRequest;
-import net.dzikoysk.funnyguilds.concurrency.requests.prefix.PrefixGlobalAddPlayerRequest;
 import net.dzikoysk.funnyguilds.config.NumberRange;
 import net.dzikoysk.funnyguilds.config.sections.HeartConfiguration;
+import net.dzikoysk.funnyguilds.data.tasks.DatabaseUpdateGuildAsyncTask;
 import net.dzikoysk.funnyguilds.event.FunnyEvent.EventCause;
 import net.dzikoysk.funnyguilds.event.SimpleEventHandler;
 import net.dzikoysk.funnyguilds.event.guild.GuildCreateEvent;
@@ -18,6 +15,7 @@ import net.dzikoysk.funnyguilds.event.guild.GuildPreCreateEvent;
 import net.dzikoysk.funnyguilds.feature.command.AbstractFunnyCommand;
 import net.dzikoysk.funnyguilds.feature.hooks.HookManager;
 import net.dzikoysk.funnyguilds.feature.hooks.vault.VaultHook;
+import net.dzikoysk.funnyguilds.feature.scoreboard.ScoreboardGlobalUpdateUserSyncTask;
 import net.dzikoysk.funnyguilds.guild.Guild;
 import net.dzikoysk.funnyguilds.guild.GuildUtils;
 import net.dzikoysk.funnyguilds.guild.Region;
@@ -34,7 +32,6 @@ import org.bukkit.World;
 import org.bukkit.WorldBorder;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
-
 import static net.dzikoysk.funnyguilds.feature.command.DefaultValidation.when;
 
 @FunnyComponent
@@ -49,16 +46,12 @@ public final class CreateCommand extends AbstractFunnyCommand {
             playerOnly = true
     )
     public void execute(Player player, User user, String[] args) {
-        when(!this.config.guildsEnabled, this.messages.adminGuildsDisabled);
-        when(LocationUtils.checkWorld(player), this.messages.blockedWorld);
-        when(user.hasGuild(), this.messages.generalHasGuild);
+        when(!this.config.guildsEnabled, config -> config.admin.commands.guild.status.disabled);
+        when(LocationUtils.checkWorld(player), config -> config.guild.commands.create.blockedWorld);
+        when(user.hasGuild(), config -> config.commands.validation.hasGuild);
 
-        if (args.length != 2) {
-            when(args.length == 0, this.messages.generalNoTagGiven);
-            when(args.length == 1, this.messages.generalNoNameGiven);
-
-            throw new ValidationException(this.messages.createMore);
-        }
+        when(args.length == 0, config -> config.commands.validation.noTagGiven);
+        when(args.length == 1, config -> config.commands.validation.noNameGiven);
 
         String tag = args[0];
         if (!this.config.guildTagKeepCase) {
@@ -69,35 +62,30 @@ public final class CreateCommand extends AbstractFunnyCommand {
         Location guildLocation = player.getLocation().getBlock().getLocation();
         World world = player.getWorld();
 
-        when(tag.length() > this.config.createTagLength,
-                FunnyFormatter.format(this.messages.createTagLength, "{LENGTH}", this.config.createTagLength));
         when(tag.length() < this.config.createTagMinLength,
-                FunnyFormatter.format(this.messages.createTagMinLength, "{LENGTH}", this.config.createTagMinLength));
-        when(name.length() > this.config.createNameLength,
-                FunnyFormatter.format(this.messages.createNameLength, "{LENGTH}", this.config.createNameLength));
+                config -> config.guild.commands.create.tagMinLength, FunnyFormatter.of("{LENGTH}", this.config.createTagMinLength));
+        when(tag.length() > this.config.createTagLength,
+                config -> config.guild.commands.create.tagMaxLength, FunnyFormatter.of("{LENGTH}", this.config.createTagLength));
         when(name.length() < this.config.createNameMinLength,
-                FunnyFormatter.format(this.messages.createNameMinLength, "{LENGTH}", this.config.createNameMinLength));
+                config -> config.guild.commands.create.nameMinLength, FunnyFormatter.of("{LENGTH}", this.config.createNameMinLength));
+        when(name.length() > this.config.createNameLength,
+                config -> config.guild.commands.create.nameMaxLength, FunnyFormatter.of("{LENGTH}", this.config.createNameLength));
 
-        when(!this.config.tagRegex.matches(tag), this.messages.createOLTag);
-        when(!this.config.nameRegex.matches(name), this.messages.createOLName);
+        when(!this.config.tagRegex.matches(tag), config -> config.guild.commands.create.invalidTag);
+        when(!this.config.nameRegex.matches(name), config -> config.guild.commands.create.invalidName);
 
-        when(this.guildManager.nameExists(name), this.messages.createNameExists);
-        when(this.guildManager.tagExists(tag), this.messages.createTagExists);
-
-        when(this.config.regionsEnabled && this.regionManager.isInRegion(guildLocation), this.messages.createIsNear);
-        when(this.config.regionsEnabled && this.regionManager.isNearRegion(guildLocation), this.messages.createIsNear);
+        when(this.guildManager.tagExists(tag), config -> config.commands.validation.guildWithTagExist);
+        when(this.guildManager.nameExists(name), config -> config.commands.validation.guildWithNameExists);
 
         if (this.config.checkForRestrictedGuildNames) {
-            when(!GuildUtils.validateName(this.config, name), this.messages.restrictedGuildName);
-            when(!GuildUtils.validateTag(this.config, tag), this.messages.restrictedGuildTag);
+            when(!GuildUtils.validateTag(this.config, tag), config -> config.guild.commands.create.restrictedGuildTag);
+            when(!GuildUtils.validateName(this.config, name), config -> config.guild.commands.create.restrictedGuildName);
         }
 
         HeartConfiguration heartConfig = this.config.heart;
 
         if (this.config.regionsEnabled) {
-            if (!heartConfig.usePlayerPositionForCenterY) {
-                guildLocation.setY(heartConfig.createCenterY);
-            }
+            heartConfig.center.prepareCenterLocation(guildLocation);
 
             if (heartConfig.createEntityType != null && guildLocation.getBlockY() < (world.getMaxHeight() - 2)) {
                 guildLocation.setY(guildLocation.getBlockY() + 2);
@@ -108,8 +96,15 @@ public final class CreateCommand extends AbstractFunnyCommand {
                 distance += this.config.enlargeItems.size() * this.config.enlargeSize;
             }
 
-            when(distance > LocationUtils.flatDistance(player.getWorld().getSpawnLocation(), guildLocation),
-                    FunnyFormatter.format(this.messages.createSpawn, "{DISTANCE}", distance));
+            when(
+                    distance > LocationUtils.flatDistance(player.getWorld().getSpawnLocation(), guildLocation),
+                    config -> config.guild.commands.create.nearSpawn, FunnyFormatter.of("{DISTANCE}", distance)
+            );
+
+            when(
+                    this.regionManager.isInRegion(guildLocation) || this.regionManager.isNearRegion(guildLocation),
+                    config -> config.guild.commands.create.nearOtherGuild
+            );
         }
 
         if (this.config.rankCreateEnable) {
@@ -124,7 +119,10 @@ public final class CreateCommand extends AbstractFunnyCommand {
                         .register("{POINTS-FORMAT}", NumberRange.inRangeToString(points, this.config.pointsFormat))
                         .register("{POINTS}", points);
 
-                user.sendMessage(formatter.format(this.messages.createRank));
+                this.messageService.getMessage(config -> config.guild.commands.create.missingRankingPoints)
+                        .receiver(player)
+                        .with(formatter)
+                        .send();
                 return;
             }
         }
@@ -140,30 +138,37 @@ public final class CreateCommand extends AbstractFunnyCommand {
                 : this.config.requiredMoney;
 
         if (player.getTotalExperience() < requiredExperience) {
-            user.sendMessage(FunnyFormatter.format(this.messages.createExperience, "{EXP}", requiredExperience));
+            this.messageService.getMessage(config -> config.guild.commands.create.missingExperience)
+                    .receiver(player)
+                    .with("{EXP}", requiredExperience)
+                    .send();
             return;
         }
 
         if (VaultHook.isEconomyHooked() && !VaultHook.canAfford(player, requiredMoney)) {
-            user.sendMessage(FunnyFormatter.format(this.messages.createMoney, "{MONEY}", requiredMoney));
+            this.messageService.getMessage(config -> config.guild.commands.create.missingMoney)
+                    .receiver(player)
+                    .with("{MONEY}", requiredMoney)
+                    .send();
             return;
         }
 
-        if (!ItemUtils.playerHasEnoughItems(player, requiredItems, this.messages.createItems)) {
+        if (!ItemUtils.playerHasEnoughItems(player, requiredItems, config -> config.guild.commands.create.missingItems)) {
             return;
         }
 
         if (HookManager.WORLD_GUARD.isPresent() && HookManager.WORLD_GUARD.get().isInNonGuildsRegion(guildLocation)) {
-            user.sendMessage(this.messages.invalidGuildLocation);
+            this.messageService.getMessage(config -> config.guild.commands.create.invalidLocation)
+                    .receiver(player)
+                    .send();
             return;
         }
 
         Guild guild = new Guild(name, tag);
         guild.setOwner(user);
         guild.setLives(this.config.warLives);
-        guild.setBorn(System.currentTimeMillis());
-        guild.setValidity(Instant.now().plus(this.config.validityStart).toEpochMilli());
-        guild.setProtection(Instant.now().plus(this.config.warProtection).toEpochMilli());
+        guild.setValidity(Instant.now().plus(this.config.validityStart));
+        guild.setProtection(Instant.now().plus(this.config.warProtection));
         guild.setPvP(this.config.damageGuild);
 
         Location home = guildLocation.clone()
@@ -184,8 +189,10 @@ public final class CreateCommand extends AbstractFunnyCommand {
 
             // border box does not contain guild box
             if (!bbox.contains(gbox)) {
-                user.sendMessage(FunnyFormatter.format(this.messages.createNotEnoughDistanceFromBorder,
-                        "{BORDER-MIN-DISTANCE}", this.config.createMinDistanceFromBorder));
+                this.messageService.getMessage(config -> config.guild.commands.create.nearBorder)
+                        .receiver(player)
+                        .with("{BORDER-MIN-DISTANCE}", this.config.createMinDistanceFromBorder)
+                        .send();
                 return;
             }
         }
@@ -201,7 +208,10 @@ public final class CreateCommand extends AbstractFunnyCommand {
             EconomyResponse withdrawResult = VaultHook.withdrawFromPlayerBank(player, requiredMoney);
 
             if (!withdrawResult.transactionSuccess()) {
-                user.sendMessage(FunnyFormatter.format(this.messages.withdrawError, "{ERROR}", withdrawResult.errorMessage));
+                this.messageService.getMessage(config -> config.guild.commands.create.withdrawError)
+                        .receiver(player)
+                        .with("{ERROR}", withdrawResult.errorMessage)
+                        .send();
                 return;
             }
         }
@@ -210,7 +220,9 @@ public final class CreateCommand extends AbstractFunnyCommand {
             if (heartConfig.pasteSchematicOnCreation) {
                 HookManager.WORLD_EDIT.peek(worldEdit -> {
                     if (!worldEdit.pasteSchematic(heartConfig.guildSchematicFile, guildLocation, heartConfig.pasteSchematicWithAir)) {
-                        user.sendMessage(this.messages.createGuildCouldNotPasteSchematic);
+                        this.messageService.getMessage(config -> config.guild.commands.create.couldNotPasteSchematic)
+                                .receiver(player)
+                                .send();
                     }
                 });
             }
@@ -233,8 +245,9 @@ public final class CreateCommand extends AbstractFunnyCommand {
             }
 
             this.guildManager.spawnHeart(this.plugin.getGuildEntityHelper(), guild);
-            //player.teleport(guildLocation);
-            guild.teleportHome(player);
+            if (this.config.heart.teleportToHeartOnCreate) {
+                guild.teleportHome(player);
+            }
         }
 
         this.guildManager.addGuild(guild);
@@ -242,11 +255,10 @@ public final class CreateCommand extends AbstractFunnyCommand {
 
         guild.getRegion().peek(region -> this.regionManager.addRegion(region));
 
-        this.concurrencyManager.postRequests(
-                new PrefixGlobalAddGuildRequest(this.individualPrefixManager, guild),
-                new PrefixGlobalAddPlayerRequest(this.individualPrefixManager, user.getName()),
-                new DatabaseUpdateGuildRequest(this.plugin.getDataModel(), guild)
-        );
+        this.plugin.scheduleFunnyTasks(new DatabaseUpdateGuildAsyncTask(this.plugin.getDataModel(), guild));
+        this.plugin.getIndividualNameTagManager()
+                .map(manager -> new ScoreboardGlobalUpdateUserSyncTask(manager, user))
+                .peek(this.plugin::scheduleFunnyTasks);
 
         SimpleEventHandler.handle(new GuildCreateEvent(EventCause.USER, user, guild));
 
@@ -255,8 +267,14 @@ public final class CreateCommand extends AbstractFunnyCommand {
                 .register("{TAG}", tag)
                 .register("{PLAYER}", player.getName());
 
-        user.sendMessage(formatter.format(this.messages.createGuild));
-        this.broadcastMessage(formatter.format(this.messages.broadcastCreate));
+        this.messageService.getMessage(config -> config.guild.commands.create.created)
+                .receiver(player)
+                .with(formatter)
+                .send();
+        this.messageService.getMessage(config -> config.guild.commands.create.createdBroadcast)
+                .broadcast()
+                .with(formatter)
+                .send();
 
         if (!this.config.giveRewardsForFirstGuild || this.guildManager.countGuilds() > 1) {
             return;

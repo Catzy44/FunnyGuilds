@@ -8,6 +8,7 @@ import net.dzikoysk.funnyguilds.config.PluginConfiguration;
 import net.dzikoysk.funnyguilds.config.sections.HologramConfiguration;
 import net.dzikoysk.funnyguilds.event.guild.GuildCreateEvent;
 import net.dzikoysk.funnyguilds.event.guild.GuildDeleteEvent;
+import net.dzikoysk.funnyguilds.event.guild.GuildMoveEvent;
 import net.dzikoysk.funnyguilds.feature.holograms.HologramsHook;
 import net.dzikoysk.funnyguilds.guild.Guild;
 import net.dzikoysk.funnyguilds.shared.bukkit.ChatUtils;
@@ -65,7 +66,7 @@ public final class HolographicDisplaysHook extends HologramsHook implements List
         }
 
         holo.appendTexts(PandaStream.of(holoConfig.displayedLines)
-                .map(line -> this.plugin.getGuildPlaceholdersService().format(line, guild))
+                .map(line -> this.plugin.getGuildPlaceholdersService().format(null, line, guild))
                 .map(ChatUtils::colored)
                 .toList());
 
@@ -88,12 +89,16 @@ public final class HolographicDisplaysHook extends HologramsHook implements List
         if (holo == null) {
             return;
         }
-
         holo.delete();
     }
 
     @EventHandler
     public void handleGuildCreate(GuildCreateEvent event) {
+        this.update(event.getGuild());
+    }
+
+    @EventHandler
+    public void handleGuildMove(GuildMoveEvent event) {
         this.update(event.getGuild());
     }
 

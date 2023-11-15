@@ -1,9 +1,9 @@
 name: FunnyGuilds CI
 on:
   push:
-    branches: [ master ]
+    branches: [ 4.x, 5.x, 6.x ]
   pull_request:
-    branches: [ master ]
+    branches: [ 4.x, 5.x, 6.x ]
 jobs:
   build:
     name: "Build with JDK${{ matrix.jdk }}"
@@ -12,16 +12,16 @@ jobs:
       matrix:
         jdk: [ 17 ]
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Setup Maven cache
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       with:
         path: ~/.m2/repository
         key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
         restore-keys: |
           ${{ runner.os }}-maven-
     - name: Setup Gradle cache
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       with:
         path: |
           ~/.gradle/caches

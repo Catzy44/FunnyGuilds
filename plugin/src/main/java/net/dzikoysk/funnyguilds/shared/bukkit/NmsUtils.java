@@ -2,7 +2,6 @@ package net.dzikoysk.funnyguilds.shared.bukkit;
 
 import java.text.DecimalFormat;
 import net.dzikoysk.funnyguilds.FunnyGuilds;
-import org.bukkit.entity.Player;
 
 public final class NmsUtils {
 
@@ -21,11 +20,11 @@ public final class NmsUtils {
     }
 
     public static int getReloadCount() {
-        return FunnyGuilds.getInstance().getNmsAccessor().getStatisticsAccessor().getReloadCount();
-    }
-
-    public static int getPing(Player player) {
-        return Math.max(0, FunnyGuilds.getInstance().getNmsAccessor().getStatisticsAccessor().getPlayerPing(player));
+        try {
+            return FunnyGuilds.getInstance().getNmsAccessor().getStatisticsAccessor().getReloadCount();
+        } catch (Exception ex) {
+            return -1;
+        }
     }
 
 }

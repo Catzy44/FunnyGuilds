@@ -1,21 +1,22 @@
 package net.dzikoysk.funnyguilds.feature.protection;
 
-import java.util.concurrent.TimeUnit;
+import dev.peri.yetanothermessageslibrary.message.Sendable;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.function.Function;
 import net.dzikoysk.funnyguilds.FunnyGuilds;
-import net.dzikoysk.funnyguilds.config.MessageConfiguration;
 import net.dzikoysk.funnyguilds.config.PluginConfiguration;
+import net.dzikoysk.funnyguilds.config.message.MessageConfiguration;
 import net.dzikoysk.funnyguilds.config.sections.HeartConfiguration;
 import net.dzikoysk.funnyguilds.guild.Guild;
 import net.dzikoysk.funnyguilds.guild.Region;
 import net.dzikoysk.funnyguilds.shared.FunnyFormatter;
-import net.dzikoysk.funnyguilds.shared.bukkit.ChatUtils;
 import net.dzikoysk.funnyguilds.shared.bukkit.FunnyBox;
 import net.dzikoysk.funnyguilds.user.User;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import panda.std.Option;
-import panda.std.Pair;
 import panda.std.Triple;
 
 public final class ProtectionSystem {
@@ -40,8 +41,8 @@ public final class ProtectionSystem {
         PluginConfiguration config = plugin.getPluginConfiguration();
         HeartConfiguration heartConfig = config.heart;
         if (region.getHeart().contentEquals(location)) {
-            Pair<Material, Byte> heartMaterial = heartConfig.createMaterial;
-            return Option.when(heartMaterial != null && heartMaterial.getFirst() != Material.AIR, Triple.of(player, guild, ProtectionType.HEART));
+            Material heartMaterial = heartConfig.createMaterial;
+            return Option.when(heartMaterial != null && heartMaterial != Material.AIR, Triple.of(player, guild, ProtectionType.HEART));
         }
 
         if (player.hasPermission("funnyguilds.admin.build")) {
@@ -84,25 +85,43 @@ public final class ProtectionSystem {
     }
 
     public static void defaultResponse(Triple<Player, Guild, ProtectionType> result) {
-        if (result.getThird() == ProtectionType.LOCKED) {
-            ProtectionSystem.sendRegionExplodeMessage(result.getFirst(), result.getSecond());
+        Player player = result.getFirst();
+        ProtectionType protectionType = result.getThird();
+
+        Function<MessageConfiguration, Sendable> messageSupplier;
+        switch (protectionType) {
+            case UNAUTHORIZED:
+                messageSupplier = config -> config.guild.region.protection.unauthorized;
+                break;
+            case HEART:
+                messageSupplier = config -> config.guild.region.protection.center;
+                break;
+            case HEART_INTERACTION:
+                messageSupplier = config -> config.guild.region.protection.heart;
+                break;
+            case LOCKED:
+                ProtectionSystem.sendRegionExplodeMessage(player, result.getSecond());
+                return;
+            default:
+                messageSupplier = config -> config.guild.region.protection.other;
+                break;
         }
-        else if (result.getThird() == ProtectionType.HEART_INTERACTION) {
-            ChatUtils.sendMessage(result.getFirst(), FunnyGuilds.getInstance().getMessageConfiguration().regionInteract);
-        }
-        else {
-            ChatUtils.sendMessage(result.getFirst(), FunnyGuilds.getInstance().getMessageConfiguration().regionOther);
-        }
+        FunnyGuilds.getInstance().getMessageService().getMessage(messageSupplier)
+                .receiver(player)
+                .send();
     }
 
     private static void sendRegionExplodeMessage(Player player, Guild guild) {
-        MessageConfiguration messages = FunnyGuilds.getInstance().getMessageConfiguration();
-        long time = TimeUnit.MILLISECONDS.toSeconds(guild.getBuild() - System.currentTimeMillis());
-
-        ChatUtils.sendMessage(player, FunnyFormatter.format(messages.regionExplodeInteract, "{TIME}", time));
+        guild.getBuild().peek(build -> {
+            Duration time = Duration.between(Instant.now(), build);
+            FunnyGuilds.getInstance().getMessageService().getMessage(config -> config.guild.region.explosion.interaction)
+                    .with(FunnyFormatter.of("{TIME}", time.getSeconds()))
+                    .receiver(player)
+                    .send();
+        });
     }
 
-    public static enum ProtectionType {
+    public enum ProtectionType {
 
         UNAUTHORIZED,
         LOCKED,

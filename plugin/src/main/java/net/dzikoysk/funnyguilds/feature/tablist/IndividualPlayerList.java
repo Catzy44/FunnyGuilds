@@ -17,9 +17,9 @@ import net.dzikoysk.funnyguilds.shared.MapUtils;
 import net.dzikoysk.funnyguilds.shared.bukkit.ChatUtils;
 import net.dzikoysk.funnyguilds.shared.bukkit.FunnyServer;
 import net.dzikoysk.funnyguilds.user.User;
-import org.apache.commons.lang3.StringUtils;
 import org.bukkit.entity.Player;
 import panda.std.Option;
+import panda.utilities.StringUtils;
 import panda.utilities.text.Joiner;
 
 public class IndividualPlayerList {
@@ -83,16 +83,16 @@ public class IndividualPlayerList {
         if (this.animated) {
             TablistPage page = this.pages.get(this.currentPage);
             if (page != null) {
-                if (page.playerList != null) {
-                    unformattedCells.putAll(page.playerList);
+                if (page.cells != null) {
+                    unformattedCells.putAll(page.cells);
                 }
 
-                if (page.playerListHeader != null) {
-                    header = page.playerListHeader;
+                if (page.header != null) {
+                    header = page.header;
                 }
 
-                if (page.playerListFooter != null) {
-                    footer = page.playerListFooter;
+                if (page.footer != null) {
+                    footer = page.footer;
                 }
             }
         }
@@ -136,11 +136,11 @@ public class IndividualPlayerList {
         allCells[PlayerListConstants.DEFAULT_CELL_COUNT + 1] = footer;
 
         String mergedCells = Joiner.on("\0").join(allCells).toString();
-        return StringUtils.splitPreserveAllTokens(this.putVars(mergedCells), '\0');
+        return StringUtils.split(this.putVars(mergedCells), "\0");
     }
 
     private String putTop(String cell) {
-        return FunnyGuilds.getInstance().getRankPlaceholdersService().format(cell, this.user);
+        return FunnyGuilds.getInstance().getRankPlaceholdersService().format(this.user, cell, this.user);
     }
 
     private String putVars(String cell) {
@@ -150,10 +150,9 @@ public class IndividualPlayerList {
         if (playerOption.isEmpty()) {
             return formatted;
         }
-
         Player player = playerOption.get();
 
-        formatted = FunnyGuilds.getInstance().getTablistPlaceholdersService().format(formatted, this.user);
+        formatted = FunnyGuilds.getInstance().getTablistPlaceholdersService().format(this.user, formatted, this.user);
         formatted = ChatUtils.colored(formatted);
         formatted = HookUtils.replacePlaceholders(player, formatted);
 
@@ -162,13 +161,11 @@ public class IndividualPlayerList {
 
     public SkinTexture[] putTexturePrepareCells() {
         SkinTexture[] textures = new SkinTexture[PlayerListConstants.DEFAULT_CELL_COUNT];
-
         this.cellTextures.forEach((range, texture) -> {
             for (int i = range.getMinRange().intValue(); i <= range.getMaxRange().intValue(); i++) {
                 textures[i - 1] = texture;
             }
         });
-
         return textures;
     }
 

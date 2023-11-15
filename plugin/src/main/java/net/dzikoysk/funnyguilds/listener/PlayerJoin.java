@@ -1,8 +1,6 @@
 package net.dzikoysk.funnyguilds.listener;
 
-import net.dzikoysk.funnyguilds.concurrency.requests.dummy.DummyGlobalUpdateUserRequest;
-import net.dzikoysk.funnyguilds.concurrency.requests.prefix.PrefixGlobalUpdatePlayer;
-import net.dzikoysk.funnyguilds.feature.prefix.IndividualPrefix;
+import net.dzikoysk.funnyguilds.feature.scoreboard.ScoreboardGlobalUpdateUserSyncTask;
 import net.dzikoysk.funnyguilds.feature.tablist.IndividualPlayerList;
 import net.dzikoysk.funnyguilds.feature.war.WarPacketCallbacks;
 import net.dzikoysk.funnyguilds.nms.api.packet.FunnyGuildsInboundChannelHandler;
@@ -35,40 +33,35 @@ public class PlayerJoin extends AbstractFunnyListener {
 
         UserCache cache = user.getCache();
 
-        if (this.tablistConfig.playerListEnable) {
+        if (this.tablistConfig.enabled) {
             IndividualPlayerList individualPlayerList = new IndividualPlayerList(
                     user,
                     this.nmsAccessor.getPlayerListAccessor(),
                     this.funnyServer,
-                    this.tablistConfig.playerList,
-                    this.tablistConfig.playerListHeader, this.tablistConfig.playerListFooter,
-                    this.tablistConfig.playerListAnimated, this.tablistConfig.pages,
+                    this.tablistConfig.cells,
+                    this.tablistConfig.header, this.tablistConfig.footer,
+                    this.tablistConfig.animated, this.tablistConfig.pages,
                     this.tablistConfig.heads.textures,
-                    this.tablistConfig.playerListPing,
-                    this.tablistConfig.playerListFillCells
+                    this.tablistConfig.cellsPing,
+                    this.tablistConfig.fillCells
             );
 
             individualPlayerList.send();
             cache.setPlayerList(individualPlayerList);
         }
 
-        cache.updateScoreboardIfNull(player);
-
-        if (this.config.guildTagEnabled && cache.getIndividualPrefix().isEmpty()) {
-            IndividualPrefix prefix = new IndividualPrefix(user);
-            prefix.initialize();
-            cache.setIndividualPrefix(prefix);
-        }
-
-        this.concurrencyManager.postRequests(
-                new PrefixGlobalUpdatePlayer(this.individualPrefixManager, player),
-                new DummyGlobalUpdateUserRequest(user)
-        );
+        this.plugin.getIndividualNameTagManager()
+                .map(manager -> new ScoreboardGlobalUpdateUserSyncTask(manager, user, true))
+                .peek(this.plugin::scheduleFunnyTasks);
+        this.plugin.getDummyManager()
+                .map(manager -> new ScoreboardGlobalUpdateUserSyncTask(manager, user, true))
+                .peek(this.plugin::scheduleFunnyTasks);
 
         FunnyGuildsInboundChannelHandler inboundChannelHandler = this.nmsAccessor.getPacketAccessor().getOrInstallInboundChannelHandler(player);
         inboundChannelHandler.getPacketCallbacksRegistry().registerPacketCallback(new WarPacketCallbacks(this.plugin, user));
 
         FunnyGuildsOutboundChannelHandler outboundChannelHandler = this.nmsAccessor.getPacketAccessor().getOrInstallOutboundChannelHandler(player);
+        outboundChannelHandler.getPacketSuppliersRegistry().setOwner(player);
         outboundChannelHandler.getPacketSuppliersRegistry().registerPacketSupplier(new GuildEntitySupplier(this.guildEntityHelper));
 
         this.plugin.getServer().getScheduler().runTaskLaterAsynchronously(this.plugin, () -> {

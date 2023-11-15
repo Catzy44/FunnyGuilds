@@ -1,5 +1,6 @@
 package net.dzikoysk.funnyguilds.feature.command.admin;
 
+import java.time.Duration;
 import java.util.Arrays;
 import net.dzikoysk.funnycommands.stereotypes.FunnyCommand;
 import net.dzikoysk.funnyguilds.event.SimpleEventHandler;
@@ -14,7 +15,6 @@ import net.dzikoysk.funnyguilds.shared.bukkit.ChatUtils;
 import net.dzikoysk.funnyguilds.user.User;
 import org.bukkit.command.CommandSender;
 import panda.utilities.text.Joiner;
-
 import static net.dzikoysk.funnyguilds.feature.command.DefaultValidation.when;
 
 public final class BanCommand extends AbstractFunnyCommand {
@@ -26,19 +26,18 @@ public final class BanCommand extends AbstractFunnyCommand {
             acceptsExceeded = true
     )
     public void execute(CommandSender sender, String[] args) {
-        when(args.length < 1, this.messages.generalNoTagGiven);
-        when(args.length < 2, this.messages.adminNoBanTimeGiven);
-        when(args.length < 3, this.messages.adminNoReasonGiven);
-
+        when(args.length < 1, config -> config.commands.validation.noTagGiven);
         Guild guild = GuildValidation.requireGuildByTag(args[0]);
-        when(guild.isBanned(), this.messages.adminGuildBanned);
+        when(guild.isBanned(), config -> config.admin.commands.guild.ban.alreadyBanned);
 
-        long time = TimeUtils.parseTime(args[1]);
-        when(time < 1, this.messages.adminTimeError);
+        when(args.length < 2, config -> config.admin.commands.guild.ban.noTimeGiven);
+        Duration time = TimeUtils.parseTime(args[1]);
+        when(time.isZero() || time.isNegative(), config -> config.commands.validation.invalidTime);
 
+        when(args.length < 3, config -> config.admin.commands.guild.ban.noReasonGiven);
         String reason = Joiner.on(" ").join(Arrays.copyOfRange(args, 2, args.length)).toString();
-        User admin = AdminUtils.getAdminUser(sender);
 
+        User admin = AdminUtils.getAdminUser(sender);
         if (!SimpleEventHandler.handle(new GuildBanEvent(AdminUtils.getCause(admin), admin, guild, time, reason))) {
             return;
         }
@@ -46,13 +45,20 @@ public final class BanCommand extends AbstractFunnyCommand {
         BanUtils.ban(guild, time, reason);
 
         FunnyFormatter formatter = new FunnyFormatter()
-                .register("{GUILD}", guild.getName())
+                .register("{NAME}", guild.getName())
                 .register("{TAG}", guild.getTag())
                 .register("{TIME}", args[1])
-                .register("{REASON}", ChatUtils.colored(reason));
+                .register("{REASON}", ChatUtils.colored(reason))
+                .register("{ADMIN}", sender.getName());
 
-        this.sendMessage(sender, formatter.format(this.messages.adminGuildBan));
-        this.broadcastMessage(formatter.format(this.messages.broadcastBan));
+        this.messageService.getMessage(config -> config.admin.commands.guild.ban.banned)
+                .receiver(sender)
+                .with(formatter)
+                .send();
+        this.messageService.getMessage(config -> config.admin.commands.guild.ban.bannedBroadcast)
+                .broadcast()
+                .with(formatter)
+                .send();
     }
 
 }

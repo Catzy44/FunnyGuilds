@@ -6,8 +6,6 @@ import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 import me.clip.placeholderapi.expansion.Relational;
 import net.dzikoysk.funnyguilds.FunnyGuilds;
 import net.dzikoysk.funnyguilds.feature.hooks.AbstractPluginHook;
-import net.dzikoysk.funnyguilds.feature.prefix.IndividualPrefix;
-import net.dzikoysk.funnyguilds.guild.Guild;
 import net.dzikoysk.funnyguilds.rank.placeholders.RankPlaceholdersService;
 import net.dzikoysk.funnyguilds.user.User;
 import net.dzikoysk.funnyguilds.user.UserManager;
@@ -68,36 +66,30 @@ public class PlaceholderAPIHook extends AbstractPluginHook {
                 return this.rankPlaceholdersService.formatTopPosition("{" + identifier.toUpperCase(Locale.ROOT) + "}", user);
             }
             else if (lowerIdentifier.contains("top-")) {
-                String temp = this.rankPlaceholdersService.formatTop("{" + identifier.toUpperCase(Locale.ROOT) + "}", user);
-                if (this.plugin.getPluginConfiguration().top.enableLegacyPlaceholders) {
-                    temp = this.rankPlaceholdersService.formatRank(temp, user);
-                }
-
-                return temp;
+                return this.rankPlaceholdersService.formatTop("{" + identifier.toUpperCase(Locale.ROOT) + "}", user);
             }
             else {
-                return this.plugin.getTablistPlaceholdersService().formatIdentifier(identifier, user);
+                return this.plugin.getTablistPlaceholdersService().formatIdentifier(user, identifier, user);
             }
         }
 
         @Override // one - seeing the placeholder, two - about which the placeholder is
-        public String onPlaceholderRequest(Player one, Player two, String identifier) {
-            if (one == null || two == null || !identifier.equalsIgnoreCase("prefix")) {
+        public String onPlaceholderRequest(Player observer, Player target, String identifier) {
+            if (observer == null || target == null || !identifier.equalsIgnoreCase("tag")) {
                 return "";
             }
 
             UserManager userManager = this.plugin.getUserManager();
-            Option<User> userOneOption = userManager.findByPlayer(one);
-            Option<User> userTwoOption = userManager.findByPlayer(two);
+            Option<User> userObserverOption = userManager.findByPlayer(observer);
+            Option<User> userTargetOption = userManager.findByPlayer(target);
 
-            if (userOneOption.isEmpty() || userTwoOption.isEmpty()) {
+            if (userObserverOption.isEmpty() || userTargetOption.isEmpty()) {
                 return "";
             }
 
-            return IndividualPrefix.chooseAndPreparePrefix(
-                    this.plugin.getPluginConfiguration(),
-                    userOneOption.get().getGuild().orElseGet((Guild) null),
-                    userTwoOption.get().getGuild().orElseGet((Guild) null)
+            return this.plugin.getPluginConfiguration().relationalTag.chooseAndPrepareTag(
+                    userObserverOption.get().getGuild().orNull(),
+                    userTargetOption.get().getGuild().orNull()
             );
         }
 

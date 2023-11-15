@@ -4,12 +4,9 @@ import net.dzikoysk.funnyguilds.event.FunnyEvent.EventCause;
 import net.dzikoysk.funnyguilds.event.SimpleEventHandler;
 import net.dzikoysk.funnyguilds.event.guild.GuildRegionEnterEvent;
 import net.dzikoysk.funnyguilds.event.guild.GuildRegionLeaveEvent;
-import net.dzikoysk.funnyguilds.feature.notification.NotificationStyle;
 import net.dzikoysk.funnyguilds.guild.Region;
 import net.dzikoysk.funnyguilds.listener.AbstractFunnyListener;
-import net.dzikoysk.funnyguilds.nms.api.message.TitleMessage;
 import net.dzikoysk.funnyguilds.shared.FunnyFormatter;
-import net.dzikoysk.funnyguilds.shared.bukkit.ChatUtils;
 import net.dzikoysk.funnyguilds.user.User;
 import net.dzikoysk.funnyguilds.user.UserCache;
 import org.bukkit.Bukkit;
@@ -24,11 +21,7 @@ public class PlayerMove extends AbstractFunnyListener {
 
     @EventHandler
     public void onTeleport(PlayerTeleportEvent event) {
-        this.userManager.findByUuid(event.getPlayer().getUniqueId())
-                .map(User::getCache)
-                .peek(userCache -> userCache.setEnter(false));
-
-        this.onMove(event);
+        this.onMove(event); // We have to manually call onMove when player teleports - in other case the move event won't be called
     }
 
     @EventHandler
@@ -36,7 +29,6 @@ public class PlayerMove extends AbstractFunnyListener {
         Location from = event.getFrom();
         Location to = event.getTo();
         Player player = event.getPlayer();
-
         if (to == null) {
             return;
         }
@@ -54,158 +46,77 @@ public class PlayerMove extends AbstractFunnyListener {
             User user = userOption.get();
             UserCache cache = user.getCache();
 
-            Option<Region> regionOption = this.regionManager.findRegionAtLocation(to);
-            if (regionOption.isEmpty() && user.getCache().getEnter()) {
-                cache.setEnter(false);
+            Option<Region> regionOptionFrom = this.regionManager.findRegionAtLocation(from);
+            Option<Region> regionOptionTo = this.regionManager.findRegionAtLocation(to);
 
-                this.regionManager.findRegionAtLocation(from)
-                        .map(Region::getGuild)
-                        .peek(guild -> {
-                            if (!SimpleEventHandler.handle(new GuildRegionLeaveEvent(EventCause.USER, user, guild))) {
-                                event.setCancelled(true);
-                                return;
-                            }
-
-                            FunnyFormatter formatter = new FunnyFormatter()
-                                    .register("{GUILD}", guild.getName())
-                                    .register("{TAG}", guild.getTag());
-
-                            if (this.config.regionEnterNotificationStyle.contains(NotificationStyle.ACTIONBAR)) {
-                                this.messageAccessor.sendActionBarMessage(formatter.format(this.messages.notificationActionbarLeaveGuildRegion), player);
-                            }
-
-                            if (this.config.regionEnterNotificationStyle.contains(NotificationStyle.BOSSBAR)) {
-                                this.bossBarService.getBossBarProvider(this.funnyServer, user).sendNotification(
-                                        formatter.format(this.messages.notificationBossbarLeaveGuildRegion),
-                                        this.config.bossBarOptions_,
-                                        this.config.regionNotificationTime
-                                );
-                            }
-
-                            if (this.config.regionEnterNotificationStyle.contains(NotificationStyle.CHAT)) {
-                                ChatUtils.sendMessage(player, formatter.format(this.messages.notificationChatLeaveGuildRegion));
-                            }
-
-                            if (this.config.regionEnterNotificationStyle.contains(NotificationStyle.TITLE)) {
-                                TitleMessage titleMessage = TitleMessage.builder()
-                                        .text(formatter.format(this.messages.notificationTitleLeaveGuildRegion))
-                                        .subText(formatter.format(this.messages.notificationSubtitleLeaveGuildRegion))
-                                        .fadeInDuration(this.config.notificationTitleFadeIn)
-                                        .stayDuration(this.config.notificationTitleStay)
-                                        .fadeOutDuration(this.config.notificationTitleFadeOut)
-                                        .build();
-
-                                this.messageAccessor.sendTitleMessage(titleMessage, player);
-                            }
-                        });
+            if (regionOptionFrom.equals(regionOptionTo)) {
+                return;
             }
-            else if (!cache.getEnter()) {
-                regionOption.map(Region::getGuild)
-                        .peek(guild -> {
-                            if (guild.getName() == null) {
-                                return;
-                            }
 
-                            if (!SimpleEventHandler.handle(new GuildRegionEnterEvent(EventCause.USER, user, guild))) {
-                                event.setCancelled(true);
-                                return;
-                            }
+            regionOptionFrom
+                    .map(Region::getGuild)
+                    .peek(guild -> {
+                        this.logger.debug(String.format("Player %s left region of guild %s", player.getName(), guild.getName()));
 
-                            cache.setEnter(true);
+                        if (!SimpleEventHandler.handle(new GuildRegionLeaveEvent(EventCause.USER, user, guild))) {
+                            event.setCancelled(true);
+                            return;
+                        }
 
-                            if (this.config.heart.createEntityType != null) {
-                                Bukkit.getScheduler().runTaskLaterAsynchronously(this.plugin, () -> {
-                                    this.guildEntityHelper.spawnGuildEntity(guild, player);
-                                }, 40L);
-                            }
+                        FunnyFormatter formatter = new FunnyFormatter()
+                                .register("{GUILD}", guild.getName())
+                                .register("{TAG}", guild.getTag());
 
-                            FunnyFormatter formatter = new FunnyFormatter()
-                                    .register("{GUILD}", guild.getName())
-                                    .register("{TAG}", guild.getTag())
-                                    .register("{PLAYER}", player.getName());
+                        this.messageService.getMessage(config -> config.guild.region.move.leave)
+                                .with(formatter)
+                                .receiver(player)
+                                .send();
+                    });
 
-                            if (this.config.regionEnterNotificationStyle.contains(NotificationStyle.ACTIONBAR)) {
-                                this.messageAccessor.sendActionBarMessage(formatter.format(this.messages.notificationActionbarEnterGuildRegion), player);
-                            }
+            regionOptionTo
+                    .map(Region::getGuild)
+                    .peek(guild -> {
+                        this.logger.debug(String.format("Player %s entered region of guild %s", player.getName(), guild.getName()));
 
-                            if (this.config.regionEnterNotificationStyle.contains(NotificationStyle.BOSSBAR)) {
-                                this.bossBarService.getBossBarProvider(this.funnyServer, user).sendNotification(
-                                        formatter.format(this.messages.notificationBossbarEnterGuildRegion),
-                                        this.config.bossBarOptions_,
-                                        this.config.regionNotificationTime
-                                );
-                            }
+                        if (!SimpleEventHandler.handle(new GuildRegionEnterEvent(EventCause.USER, user, guild))) {
+                            event.setCancelled(true);
+                            return;
+                        }
 
-                            if (this.config.regionEnterNotificationStyle.contains(NotificationStyle.CHAT)) {
-                                user.sendMessage(formatter.format(this.messages.notificationChatEnterGuildRegion));
-                            }
+                        if (this.config.heart.createEntityType != null) {
+                            Bukkit.getScheduler().runTaskLater(this.plugin, () -> this.guildEntityHelper.spawnGuildEntity(guild, player), 40L);
+                        }
 
-                            if (this.config.regionEnterNotificationStyle.contains(NotificationStyle.TITLE)) {
-                                TitleMessage titleMessage = TitleMessage.builder()
-                                        .text(formatter.format(this.messages.notificationTitleEnterGuildRegion))
-                                        .subText(formatter.format(this.messages.notificationSubtitleEnterGuildRegion))
-                                        .fadeInDuration(this.config.notificationTitleFadeIn)
-                                        .stayDuration(this.config.notificationTitleStay)
-                                        .fadeOutDuration(this.config.notificationTitleFadeOut)
-                                        .build();
+                        FunnyFormatter formatter = new FunnyFormatter()
+                                .register("{GUILD}", guild.getName())
+                                .register("{TAG}", guild.getTag())
+                                .register("{PLAYER}", player.getName());
 
-                                this.messageAccessor.sendTitleMessage(titleMessage, player);
-                            }
+                        this.messageService.getMessage(config -> config.guild.region.move.enter)
+                                .with(formatter)
+                                .receiver(player)
+                                .send();
 
-                            if (player.hasPermission("funnyguilds.admin.notification")) {
-                                return;
-                            }
+                        if (player.hasPermission("funnyguilds.admin.notification")) {
+                            return;
+                        }
 
-                            if (cache.getNotificationTime() > 0 && System.currentTimeMillis() < cache.getNotificationTime()) {
-                                return;
-                            }
+                        if (cache.getNotificationTime() > 0 && System.currentTimeMillis() < cache.getNotificationTime()) {
+                            return;
+                        }
 
-                            if (!this.config.regionEnterNotificationGuildMember && user.hasGuild() &&
-                                    guild.getTag().equals(user.getGuild().get().getTag())) {
-                                return;
-                            }
+                        if (!this.config.regionEnterNotificationGuildMember && user.hasGuild() &&
+                                guild.getTag().equals(user.getGuild().get().getTag())) {
+                            return;
+                        }
 
-                            for (User memberUser : guild.getOnlineMembers()) {
-                                Option<Player> memberPlayer = this.funnyServer.getPlayer(memberUser);
-                                if (memberPlayer.isEmpty()) {
-                                    continue;
-                                }
+                        this.messageService.getMessage(config -> config.guild.region.move.intruderEnter)
+                                .with(formatter)
+                                .receiver(guild)
+                                .send();
 
-                                if (this.config.regionEnterNotificationStyle.contains(NotificationStyle.ACTIONBAR)) {
-                                    this.messageAccessor.sendActionBarMessage(formatter.format(
-                                            this.messages.notificationActionbarIntruderEnterGuildRegion), memberPlayer.get()
-                                    );
-                                }
-
-                                if (this.config.regionEnterNotificationStyle.contains(NotificationStyle.BOSSBAR)) {
-                                    this.bossBarService.getBossBarProvider(this.funnyServer, memberUser).sendNotification(
-                                            formatter.format(this.messages.notificationBossbarIntruderEnterGuildRegion),
-                                            this.config.bossBarOptions_,
-                                            this.config.regionNotificationTime
-                                    );
-                                }
-
-                                if (this.config.regionEnterNotificationStyle.contains(NotificationStyle.CHAT)) {
-                                    memberUser.sendMessage(formatter.format(this.messages.notificationChatIntruderEnterGuildRegion));
-                                }
-
-                                if (this.config.regionEnterNotificationStyle.contains(NotificationStyle.TITLE)) {
-                                    TitleMessage titleMessage = TitleMessage.builder()
-                                            .text(formatter.format(this.messages.notificationTitleIntruderEnterGuildRegion))
-                                            .subText(formatter.format(this.messages.notificationSubtitleIntruderEnterGuildRegion))
-                                            .fadeInDuration(this.config.notificationTitleFadeIn)
-                                            .stayDuration(this.config.notificationTitleStay)
-                                            .fadeOutDuration(this.config.notificationTitleFadeOut)
-                                            .build();
-
-                                    this.messageAccessor.sendTitleMessage(titleMessage, memberPlayer.get());
-                                }
-
-                            }
-
-                            cache.setNotificationTime(System.currentTimeMillis() + 1000L * this.config.regionNotificationCooldown);
-                        });
-            }
+                        cache.setNotificationTime(System.currentTimeMillis() + 1000L * this.config.regionNotificationCooldown);
+                    });
         });
     }
 

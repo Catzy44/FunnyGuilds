@@ -6,10 +6,10 @@ import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import net.dzikoysk.funnyguilds.nms.api.ProtocolDependentHelper;
 import net.dzikoysk.funnyguilds.nms.api.playerlist.PlayerList;
 import net.dzikoysk.funnyguilds.nms.api.playerlist.PlayerListConstants;
 import net.dzikoysk.funnyguilds.nms.api.playerlist.SkinTexture;
-import net.dzikoysk.funnyguilds.nms.v1_8R3.playerlist.PlayerInfoDataHelper;
 import net.minecraft.server.v1_16_R3.EnumGamemode;
 import net.minecraft.server.v1_16_R3.IChatBaseComponent;
 import net.minecraft.server.v1_16_R3.Packet;
@@ -57,16 +57,19 @@ public class V1_16R3PlayerList implements PlayerList {
             PacketPlayOutPlayerInfo updatePlayerPacket = new PacketPlayOutPlayerInfo(EnumPlayerInfoAction.UPDATE_DISPLAY_NAME);
 
             for (int i = 0; i < this.cellCount; i++) {
+                String paddedIdentifier = StringUtils.leftPad(String.valueOf(i), 2, '0');
+                String gameProfileName = ProtocolDependentHelper.getGameProfileNameBasedOnPlayerProtocolVersion(player, paddedIdentifier);
+
                 if (this.profileCache[i] == null) {
                     this.profileCache[i] = new GameProfile(
-                            UUID.fromString(String.format(PlayerListConstants.UUID_PATTERN, StringUtils.leftPad(String.valueOf(i), 2, '0'))),
-                            " "
+                            UUID.fromString(String.format(PlayerListConstants.UUID_PATTERN, paddedIdentifier)),
+                            gameProfileName
                     );
                 }
 
                 String text = playerListCells[i];
                 GameProfile gameProfile = this.profileCache[i];
-                IChatBaseComponent component = CraftChatMessage.fromStringOrNull(text, false);
+                IChatBaseComponent component = CraftChatMessage.fromString(text, false)[0];
 
                 if (this.firstPacket || forceUpdateSlots.contains(i)) {
                     SkinTexture texture = cellTextures[i];

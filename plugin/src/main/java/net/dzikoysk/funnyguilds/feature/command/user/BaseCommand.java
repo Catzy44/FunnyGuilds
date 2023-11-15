@@ -9,9 +9,9 @@ import net.dzikoysk.funnycommands.stereotypes.FunnyComponent;
 import net.dzikoysk.funnyguilds.feature.command.AbstractFunnyCommand;
 import net.dzikoysk.funnyguilds.feature.command.IsMember;
 import net.dzikoysk.funnyguilds.guild.Guild;
-import net.dzikoysk.funnyguilds.shared.FunnyFormatter;
 import net.dzikoysk.funnyguilds.shared.bukkit.ItemUtils;
 import net.dzikoysk.funnyguilds.shared.bukkit.LocationUtils;
+import net.dzikoysk.funnyguilds.shared.bukkit.PermissionUtil;
 import net.dzikoysk.funnyguilds.user.User;
 import net.dzikoysk.funnyguilds.user.UserCache;
 import org.bukkit.Bukkit;
@@ -33,30 +33,29 @@ public final class BaseCommand extends AbstractFunnyCommand {
             playerOnly = true
     )
     public void execute(Player player, @IsMember User member, Guild guild) {
-        when(!this.config.regionsEnabled, this.messages.regionsDisabled);
-        when(!this.config.baseEnable, this.messages.baseTeleportationDisabled);
-        when(member.getCache().getTeleportation() != null, this.messages.baseIsTeleportation);
+        when(!this.config.regionsEnabled, config -> config.guild.region.disabled);
+        when(!this.config.baseEnable, config -> config.guild.commands.base.disabled);
+        when(member.getCache().getTeleportation() != null, config -> config.guild.commands.base.alreadyTeleporting);
 
         List<ItemStack> requiredItems = player.hasPermission("funnyguilds.vip.base")
                 ? Collections.emptyList()
                 : this.config.baseItems;
 
-        if (!ItemUtils.playerHasEnoughItems(player, requiredItems, this.messages.baseItems)) {
+        if (!ItemUtils.playerHasEnoughItems(player, requiredItems, config -> config.guild.commands.base.missingItems)) {
             return;
         }
 
         ItemStack[] items = ItemUtils.toArray(requiredItems);
         player.getInventory().removeItem(items);
 
-        if (this.config.baseDelay.isZero()) {
+        Duration time = PermissionUtil.findHighestValue(player, this.config.baseDelay);
+        if (time == null || time.isZero()) {
             guild.teleportHome(player);
-            member.sendMessage(this.messages.baseTeleport);
+            this.messageService.getMessage(config -> config.guild.commands.base.teleported)
+                    .receiver(member)
+                    .send();
             return;
         }
-
-        Duration time = player.hasPermission("funnyguilds.vip.baseTeleportTime")
-                ? this.config.baseDelayVip
-                : this.config.baseDelay;
 
         Location before = player.getLocation();
         Instant teleportStart = Instant.now();
@@ -71,7 +70,9 @@ public final class BaseCommand extends AbstractFunnyCommand {
 
             if (!LocationUtils.equals(player.getLocation(), before)) {
                 cache.getTeleportation().cancel();
-                member.sendMessage(this.messages.baseMove);
+                this.messageService.getMessage(config -> config.guild.commands.base.cancelled)
+                        .receiver(member)
+                        .send();
                 cache.setTeleportation(null);
                 player.getInventory().addItem(items);
                 return;
@@ -79,13 +80,18 @@ public final class BaseCommand extends AbstractFunnyCommand {
 
             if (Duration.between(teleportStart, Instant.now()).compareTo(time) > 0) {
                 cache.getTeleportation().cancel();
-                member.sendMessage(this.messages.baseTeleport);
+                this.messageService.getMessage(config -> config.guild.commands.base.teleported)
+                        .receiver(member)
+                        .send();
                 guild.teleportHome(player);
                 cache.setTeleportation(null);
             }
         }, 0L, 10L));
 
-        member.sendMessage(FunnyFormatter.format(this.messages.baseDontMove, "{TIME}", time.getSeconds()));
+        this.messageService.getMessage(config -> config.guild.commands.base.teleporting)
+                .receiver(member)
+                .with("{TIME}", time.getSeconds())
+                .send();
     }
 
 }

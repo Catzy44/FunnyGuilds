@@ -3,7 +3,6 @@ package net.dzikoysk.funnyguilds.config.tablist;
 import com.google.common.collect.ImmutableMap;
 import eu.okaeri.configs.OkaeriConfig;
 import eu.okaeri.configs.annotation.Comment;
-import eu.okaeri.configs.annotation.CustomKey;
 import eu.okaeri.configs.annotation.NameModifier;
 import eu.okaeri.configs.annotation.NameStrategy;
 import eu.okaeri.configs.annotation.Names;
@@ -19,8 +18,7 @@ import net.dzikoysk.funnyguilds.nms.api.playerlist.SkinTexture;
 public class TablistConfiguration extends OkaeriConfig {
 
     @Comment("Czy lista graczy ma być włączona")
-    @CustomKey("player-list-enable")
-    public boolean playerListEnable = true;
+    public boolean enabled = true;
 
     @Comment("")
     @Comment("Wygląd listy graczy, przedział slotów - od 1 do 80")
@@ -34,13 +32,13 @@ public class TablistConfiguration extends OkaeriConfig {
     @Comment("{GUILD-POSITION} - pozycja gracza w gildii (formatowana jak chat-position-x)")
     @Comment("{POINTS} - punkty gracza")
     @Comment("{POINTS-FORMAT} - punkty gracza, z formatowaniem")
-    @Comment("{POSITION} - pozycja gracza w rankingu")
-    @Comment("{POSITION-<typ>} - pozycja gracza w rankingu, dla danego typu rankingu")
+    @Comment("{POSITION-<typ>} - pozycja gracza w rankingu, dla danego typu topki")
     @Comment("{KILLS} - liczba zabójstw gracza")
     @Comment("{DEATHS} - liczba śmierci gracza")
     @Comment("{ASSISTS} - liczba asyst gracza")
     @Comment("{LOGOUTS} - liczba wylogowań gracza podczas walki")
     @Comment("{KDR} - stosunek zabójstw do śmierci gracza")
+    @Comment("{KDA} - stosunek zabójstw i asyst do śmierci gracza")
     @Comment("{WG-REGION} - region WorldGuarda, na którym znajduje sie gracz (pierwszy z listy, jeśli jest ich kilka)")
     @Comment("{WG-REGIONS} - regiony WorldGuarda, na których znajduje się gracz (oddzielone przecinkami)")
     @Comment("{VAULT-MONEY} - balans konta gracza, pobierany z pluginu Vault")
@@ -56,11 +54,10 @@ public class TablistConfiguration extends OkaeriConfig {
     @Comment("{G-LIVES-SYMBOL-ALL} - liczba wszystkich żyć gildii, w postaci powtarzającego się symbolu (do ustawienia w lives-repeating-symbol.full, w config.yml)")
     @Comment("{G-ALLIES-ALL} - liczba sojuszników gildii")
     @Comment("{G-ENEMIES-ALL} - liczba przeciwników gildii")
-    @Comment("{G-TOTAL-POINTS} - suma punktów członków gildii")
-    @Comment("{G-AVG-POINTS} (kiedyś {G-POINTS}) - średnia liczba punktów członków gildii")
-    @Comment("{G-POINTS-FORMAT} - średnia liczba punktów członków gildii, z formatowaniem")
-    @Comment("{G-POSITION} - pozycja gildii gracza w rankingu")
-    @Comment("{G-POSITION-<typ>} - pozycja gildii gracza w rankingu, dla danego typu rankingu")
+    @Comment("{G-POINTS} - suma punktów członków gildii")
+    @Comment("{G-AVG-POINTS} - średnia liczba punktów członków gildii")
+    @Comment("{G-AVG-POINTS-FORMAT} - średnia liczba punktów członków gildii, z formatowaniem")
+    @Comment("{G-POSITION-<typ>} - pozycja gildii gracza w rankingu, dla danego typu topki")
     @Comment("{G-KILLS} - suma zabójstw członków gildii")
     @Comment("{G-AVG-KILLS} - średnia liczba zabójstw członków gildii")
     @Comment("{G-DEATHS} - suma śmierci członków gildii")
@@ -70,13 +67,15 @@ public class TablistConfiguration extends OkaeriConfig {
     @Comment("{G-LOGOUTS} - suma wylogowań członków gildii")
     @Comment("{G-AVG-LOGOUTS} - średnia liczba wylogowań członków gildii")
     @Comment("{G-KDR} - stosunek zabójstw do śmierci gildii")
+    @Comment("{G-KDA} - stosunek zabójstw i asyst do śmierci gildii")
     @Comment("{G-AVG-KDR} - średni stosunek zabójstw do śmierci członków gildii")
+    @Comment("{G-AVG-KDA} - średni stosunek zabójstw i asyst do śmierci członków gildii")
     @Comment("{G-MEMBERS-ONLINE} - liczba członków gildii online")
     @Comment("{G-MEMBERS-ALL} - liczba wszystkich członków gildii")
     @Comment("{G-VALIDITY} - data wygaśnięcia gildii")
-    @Comment("{G-VALIDITY-TIME} - czas wygaśnięcia gildii")
+    @Comment("{G-VALIDITY-TIME} - czas do wygaśnięcia gildii (np. 5 dni 2 godziny 1 minuta)")
     @Comment("{G-PROTECTION} - data wygaśnięcia ochrony gildii")
-    @Comment("{G-PROTECTION-TIME} - czas wygaśnięcia ochrony gildii")
+    @Comment("{G-PROTECTION-TIME} - czas do wygaśnięcia ochrony gildii (np. 5 dni 2 godziny 1 minuta)")
     @Comment("{G-REGION-SIZE} - rozmiar gildii")
     @Comment(" ")
     @Comment("> Spis pozostałych zmiennych:")
@@ -92,69 +91,64 @@ public class TablistConfiguration extends OkaeriConfig {
     @Comment("{MONTH} - miesiąc, wyrażony w postaci nazwy miesiąca")
     @Comment("{MONTH_NUMBER} - miesiąc, wyrażony w postaci liczby")
     @Comment("{YEAR} - rok")
-    @Comment("{PTOP-<pozycja>} - gracz na podanej pozycji w rankingu (np. {PTOP-1}, {PTOP-60})")
-    @Comment("{PTOP-<typ>-<pozycja>} - gracz na podanej pozycji w rankingu (np. {PTOP-KILLS-1}, {PTOP-DEATHS-60}), dla danego typu rankingu")
-    @Comment("{GTOP-<pozycja>} - gildia na podanej pozycji w rankingu (np. {GTOP-1}, {PTOP-50})")
-    @Comment("{GTOP-<typ>-<pozycja>} - gildia na podanej pozycji w rankingu (np. {GTOP-KILLS-1}, {PTOP-DEATHS-50}), dla danego typu rankingu")
-    @CustomKey("player-list")
-    public Map<Integer, String> playerList = ImmutableMap.<Integer, String>builder()
+    @Comment("{PTOP-<typ>-<pozycja>} - gracz na podanej pozycji w topce dla danego typu. Lista dostępnych typów znajduje się w 'config.yml' pod kluczem 'top.enabled-user-tops'")
+    @Comment("{GTOP-<typ>-<pozycja>} - gildia na podanej pozycji w topce dla danego typu. Lista dostępnych typów znajduje się w 'config.yml' pod kluczem 'top.enabled-guild-tops'")
+    public Map<Integer, String> cells = ImmutableMap.<Integer, String>builder()
             .put(2, " &b&lSTATYSTYKI")
             .put(4, " &7Nick: &b{PLAYER}")
             .put(6, " &7Punkty: &b{POINTS}")
-            .put(7, " &7Zabojstwa: &b{KILLS}")
-            .put(8, " &7Smierci: &b{DEATHS}")
+            .put(7, " &7Zabójstwa: &b{KILLS}")
+            .put(8, " &7Śmierci: &b{DEATHS}")
             .put(9, " &7Asysty: &b{ASSISTS}")
             .put(10, " &7KDR: &b{KDR}")
             .put(12, " &b&lINFORMACJE")
             .put(14, " &7Ping: &b{PING}")
             .put(15, " &7TPS: &b{TPS}")
             .put(17, " &7Online: &b{ONLINE}")
-            .put(19, " &7Godzina: &b{HOUR}:{MINUTE}:{SECOND}")
+            .put(19, " &7Czas: &b{DAY_OF_MONTH} {MONTH} {YEAR}&7, &b{HOUR}:{MINUTE}:{SECOND}")
             .put(22, " &b&lSTATYSTYKI GILDII")
             .put(24, " &7Gildia: &b{G-TAG}")
             .put(26, " &7Punkty: &b{G-AVG-POINTS}")
-            .put(27, " &7Zabojstwa: &b{G-KILLS}")
-            .put(28, " &7Smierci: &b{G-DEATHS}")
+            .put(27, " &7Zabójstwa: &b{G-KILLS}")
+            .put(28, " &7Śmierci: &b{G-DEATHS}")
             .put(29, " &7Asysty: &b{G-ASSISTS}")
             .put(30, " &7KDR: &b{G-KDR}")
-            .put(32, " &7Zycia: &b{G-LIVES-SYMBOL} &8(&b{G-LIVES}&8)")
+            .put(32, " &7Życia: &b{G-LIVES-SYMBOL} &8(&b{G-LIVES}&8)")
             .put(42, " &b&lTOP &8- &b&lGracze")
             .put(44, " &7Gracze: &b{USERS}")
-            .put(46, " &b1. &7{PTOP-1}")
-            .put(47, " &b2. &7{PTOP-2}")
-            .put(48, " &b3. &7{PTOP-3}")
-            .put(49, " &b4. &7{PTOP-4}")
-            .put(50, " &b5. &7{PTOP-5}")
-            .put(51, " &b6. &7{PTOP-6}")
-            .put(52, " &b7. &7{PTOP-7}")
-            .put(53, " &b8. &7{PTOP-8}")
-            .put(54, " &b9. &7{PTOP-9}")
-            .put(55, " &b10. &7{PTOP-10}")
-            .put(57, " &7Twoja pozycja: &b{POSITION}")
+            .put(46, " &b1. &7{PTOP-POINTS-1}")
+            .put(47, " &b2. &7{PTOP-POINTS-2}")
+            .put(48, " &b3. &7{PTOP-POINTS-3}")
+            .put(49, " &b4. &7{PTOP-POINTS-4}")
+            .put(50, " &b5. &7{PTOP-POINTS-5}")
+            .put(51, " &b6. &7{PTOP-POINTS-6}")
+            .put(52, " &b7. &7{PTOP-POINTS-7}")
+            .put(53, " &b8. &7{PTOP-POINTS-8}")
+            .put(54, " &b9. &7{PTOP-POINTS-9}")
+            .put(55, " &b10. &7{PTOP-POINTS-10}")
+            .put(57, " &7Twoja pozycja: &b{POSITION-POINTS}")
             .put(62, " &b&lTOP &8- &b&lGildie")
             .put(64, " &7Gildie: &b{GUILDS}")
-            .put(66, " &b1. &7{GTOP-1}")
-            .put(67, " &b2. &7{GTOP-2}")
-            .put(68, " &b3. &7{GTOP-3}")
-            .put(69, " &b4. &7{GTOP-4}")
-            .put(70, " &b5. &7{GTOP-5}")
-            .put(71, " &b6. &7{GTOP-6}")
-            .put(72, " &b7. &7{GTOP-7}")
-            .put(73, " &b8. &7{GTOP-8}")
-            .put(74, " &b9. &7{GTOP-9}")
-            .put(75, " &b10. &7{GTOP-10}")
-            .put(77, " &7Pozycja gildii: &b{G-POSITION}")
+            .put(66, " &b1. &7{GTOP-AVG_POINTS-1}")
+            .put(67, " &b2. &7{GTOP-AVG_POINTS-2}")
+            .put(68, " &b3. &7{GTOP-AVG_POINTS-3}")
+            .put(69, " &b4. &7{GTOP-AVG_POINTS-4}")
+            .put(70, " &b5. &7{GTOP-AVG_POINTS-5}")
+            .put(71, " &b6. &7{GTOP-AVG_POINTS-6}")
+            .put(72, " &b7. &7{GTOP-AVG_POINTS-7}")
+            .put(73, " &b8. &7{GTOP-AVG_POINTS-8}")
+            .put(74, " &b9. &7{GTOP-AVG_POINTS-9}")
+            .put(75, " &b10. &7{GTOP-AVG_POINTS-10}")
+            .put(77, " &7Pozycja gildii: &b{G-POSITION-AVG_POINTS}")
             .build();
 
     @Comment("")
     @Comment("Wygląd nagłówka listy graczy")
-    @CustomKey("player-list-header")
-    public String playerListHeader = "&7FunnyGuilds &b4.10.2 Snowdrop &8- &bgithub.com/funnyguilds";
+    public String header = "&7FunnyGuilds &b4.12.0 Snowdrop &8- &bgithub.com/funnyguilds";
 
     @Comment("")
     @Comment("Wygląd stopki listy graczy")
-    @CustomKey("player-list-footer")
-    public String playerListFooter = "&c&lWiadomosci braku (pokazujace sie, gdy gracz nie ma gildii) mozna zmienic w pliku &6&lmessages.yml&c&l!";
+    public String footer = "&c&lWiadomości braku (pokazujące się, gdy gracz nie ma gildii) można zmienić w plikach w katalogu &6&llang&c&l!";
 
     @Comment("")
     @Comment("Wygląd głowek na liście graczy")
@@ -204,16 +198,16 @@ public class TablistConfiguration extends OkaeriConfig {
 
     @Comment("")
     @Comment("Czy animowana lista graczy ma byc włączona")
-    public boolean playerListAnimated = true;
+    public boolean animated = true;
 
     @Comment("")
     @Comment("Animowane strony listy graczy")
-    @Comment("Wartość cycles to liczba cykli, przez które widać daną stronę na liście graczy")
-    @Comment("1 cykl to 1 wysłanie listy, częstotliwość wysyłania listy można zmienić ustawiając wartość player-list-update-interval")
+    @Comment("Wartość 'cycles' to liczba cykli, przez które widać daną stronę na liście graczy")
+    @Comment("1 cykl to 1 wysłanie listy, częstotliwość wysyłania listy można ustawić zmieniając wartość 'update-interval'")
     @Comment(" ")
-    @Comment("Podsekcję player-list konfiguruje analogicznie do sekcji player-list, ustawia się w niej wszystkie komórki, które mają się zmieniać (nadpisując zwykłą konfigurację)")
-    @Comment("Podsekcję player-list-header konfiguruje się analogicznie do sekcji player-list-header")
-    @Comment("Podsekcję player-list-footer konfiguruje się analogicznie do sekcji player-list-footer")
+    @Comment("Podsekcję 'cells' konfiguruje się analogicznie jak główną sekcje 'cells' - ustawia się w niej wszystkie komórki, które mają się zmieniać (nadpisując zwykłą konfigurację)")
+    @Comment("Podsekcję 'header' konfiguruje się analogicznie jak główną sekcje 'header'")
+    @Comment("Podsekcję 'footer' konfiguruje się analogicznie jak główną sekcje 'footer'")
     public List<TablistPage> pages = new LinkedList<>(
             Arrays.asList(
                     new TablistPage(10, ImmutableMap.<Integer, String>builder()
@@ -271,7 +265,7 @@ public class TablistConfiguration extends OkaeriConfig {
                             .put(77, " &7Pozycja gildii: &b{G-POSITION-KILLS}")
                             .build(),
                             "&7GitHub: &agithub.com/funnyguilds",
-                            "&c&lWiadomosci braku (pokazujace sie, gdy gracz nie ma gildii) mozna zmienic w pliku &7&lmessages.yml&c&l!"),
+                            "&c&lWiadomości braku (pokazujące się, gdy gracz nie ma gildii) można zmienić w plikach w katalogu &7&llang&c&l!"),
 
                     new TablistPage(10, ImmutableMap.<Integer, String>builder()
                             .put(42, " &b&lTOP &8- &b&lSmierci")
@@ -300,29 +294,22 @@ public class TablistConfiguration extends OkaeriConfig {
                             .put(77, " &7Pozycja gildii: &b{G-POSITION-DEATHS}")
                             .build(),
                             "&7Strona: &6funnyguilds.dzikoysk.net",
-                            "&c&lWiadomosci braku (pokazujace sie, gdy gracz nie ma gildii) mozna zmienic w pliku &b&lmessages.yml&c&l!")
+                            "&c&lWiadomości braku (pokazujące się, gdy gracz nie ma gildii) można zmienić w plikach w katalogu &b&llang&c&l!")
             )
     );
 
     @Min(0)
     @Comment("")
     @Comment("Wartość pingu pokazana przy każdej komórce")
-    @CustomKey("player-list-ping")
-    public int playerListPing = 0;
+    public int cellsPing = 0;
 
     @Comment("")
     @Comment("Czy wszystkie możliwe komórki mają zostać zapełnione, niezależnie od liczby graczy online")
-    @CustomKey("player-list-fill-cells")
-    public boolean playerListFillCells = true;
+    public boolean fillCells = true;
 
     @Min(1)
     @Comment("")
     @Comment("Co ile ticków lista graczy powinna zostać odświeżona (20 ticków = 1 sekunda)")
-    public int playerListUpdateInterval = 20;
-
-    @Comment("")
-    @Comment("Czy zmienne typu {PTOP-x} oraz {GTOP-x} powinny być pokolorowane w zależności od relacji gildyjnych")
-    @CustomKey("player-list-use-relationship-colors")
-    public boolean playerListUseRelationshipColors = false;
+    public int updateInterval = 20;
 
 }

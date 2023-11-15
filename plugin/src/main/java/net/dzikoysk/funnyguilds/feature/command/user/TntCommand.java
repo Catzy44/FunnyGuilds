@@ -6,7 +6,6 @@ import net.dzikoysk.funnycommands.stereotypes.FunnyComponent;
 import net.dzikoysk.funnyguilds.feature.command.AbstractFunnyCommand;
 import net.dzikoysk.funnyguilds.shared.FunnyFormatter;
 import org.bukkit.command.CommandSender;
-
 import static net.dzikoysk.funnyguilds.feature.command.DefaultValidation.when;
 
 @FunnyComponent
@@ -20,7 +19,7 @@ public final class TntCommand extends AbstractFunnyCommand {
             acceptsExceeded = true
     )
     public void execute(CommandSender sender) {
-        when(!this.config.tntProtection.time.enabled, this.messages.tntProtectDisable);
+        when(!this.config.tntProtection.time.enabled, config -> config.commands.tnt.infoAlways);
 
         LocalTime now = LocalTime.now();
         LocalTime start = this.config.tntProtection.time.startTime.getTime();
@@ -34,8 +33,17 @@ public final class TntCommand extends AbstractFunnyCommand {
                 .register("{PROTECTION_START}", this.config.tntProtection.time.startTime.getFormattedTime())
                 .register("{PROTECTION_END}", this.config.tntProtection.time.endTime.getFormattedTime());
 
-        this.sendMessage(sender, formatter.format(this.messages.tntInfo));
-        this.sendMessage(sender, isWithinTimeframe ? this.messages.tntNowDisabled : this.messages.tntNowEnabled);
+        this.messageService.getMessage(config -> config.commands.tnt.info)
+                .receiver(sender)
+                .with(formatter)
+                .send();
+        this.messageService
+                .getMessage(isWithinTimeframe
+                        ? config -> config.commands.tnt.disabled
+                        : config -> config.commands.tnt.enabled
+                )
+                .receiver(sender)
+                .send();
     }
 
 }

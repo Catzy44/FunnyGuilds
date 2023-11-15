@@ -2,29 +2,27 @@ package net.dzikoysk.funnyguilds.config.sections;
 
 import eu.okaeri.configs.OkaeriConfig;
 import eu.okaeri.configs.annotation.Comment;
-import eu.okaeri.configs.annotation.CustomKey;
 import eu.okaeri.configs.annotation.Exclude;
 import eu.okaeri.configs.annotation.NameModifier;
 import eu.okaeri.configs.annotation.NameStrategy;
 import eu.okaeri.configs.annotation.Names;
 import java.io.File;
-import java.util.Locale;
 import net.dzikoysk.funnyguilds.FunnyGuilds;
-import net.dzikoysk.funnyguilds.shared.FunnyFormatter;
 import net.dzikoysk.funnyguilds.shared.FunnyStringUtils;
+import net.dzikoysk.funnyguilds.shared.bukkit.EntityUtils;
+import net.dzikoysk.funnyguilds.shared.bukkit.LocationUtils;
 import net.dzikoysk.funnyguilds.shared.bukkit.MaterialUtils;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.entity.EntityType;
 import org.bukkit.util.Vector;
-import panda.std.Pair;
 
 @Names(strategy = NameStrategy.HYPHEN_CASE, modifier = NameModifier.TO_LOWER_CASE)
 public class HeartConfiguration extends OkaeriConfig {
 
     @Comment("Blok lub entity, które jest sercem gildii")
     @Comment("Zmiana entity wymaga pełnego restartu serwera")
-    @Comment("Bloki muszą być podawane w formacie - material:metadata")
     @Comment("Nazwy bloków muszą pasować do nazw podanych tutaj: https://spigotdocs.okaeri.cloud/select/org/bukkit/Material.html")
     @Comment("Typ entity musi byc zgodny z tą lista (i zdrowym rozsądkiem) - https://spigotdocs.okaeri.cloud/select/org/bukkit/entity/EntityType.html")
     @Comment("UWAGA: Zmiana bloku, gdy są juz zrobione jakieś gildie, spowoduje nieprawidłowe działanie ich regionów")
@@ -33,19 +31,57 @@ public class HeartConfiguration extends OkaeriConfig {
     @Comment("Jeśli pojawi sie w powietrzu - spadnie i plugin nie będzie odczytywał go poprawnie!")
     public String createType = "ender_crystal";
     @Exclude
-    public Pair<Material, Byte> createMaterial;
+    public Material createMaterial;
     @Exclude
     public EntityType createEntityType;
 
     @Comment("")
-    @Comment("Czy poziom na jakim ma być wyznaczone centrum gildii ma być ustalany przez pozycję gracza")
-    @CustomKey("use-player-position-for-center-y")
-    public boolean usePlayerPositionForCenterY = false;
+    @Comment("Konfiguracja domyślnej lokalizacji serca gildii przy jej zakładaniu")
+    public Center center = new Center();
 
-    @Comment("")
-    @Comment("Na jakim poziomie ma być wyznaczone centrum gildii")
-    @CustomKey("create-center-y")
-    public int createCenterY = 60;
+    public static class Center extends OkaeriConfig {
+
+        @Comment("Konfiguracja na jakiejś wysokości (wartość y) powinno znajdować się serce gildii")
+        @Comment("Dostępne wartości:")
+        @Comment(" FIXED - serce gildii będzie znajdowało się na stałej wysokości (patrz opcje 'fixed-height')")
+        @Comment(" PLAYER - serce gildii będzie znajdowało się na wysokości gracza")
+        @Comment(" GRAVITY - serce gildii będzie znajdywało się na powierzchni terenu")
+        public Height height = Height.FIXED;
+
+        public enum Height {
+
+            FIXED,
+            PLAYER,
+            GRAVITY
+
+        }
+
+        @Comment("")
+        @Comment("Na jakim poziomie ma być wyznaczone centrum gildii (jeśli ustawienie 'height' to 'FIXED')")
+        public int fixedHeight = 60;
+
+        @Comment("")
+        @Comment("Ostateczne przesunięcie centrum gildii")
+        @Comment("Przydatne m.in. kiedy użyjemy opcji 'GRAVITY' i chcemy żeby serce było np. 10 kratek pod powierzchnią")
+        public Vector offset = new Vector(0, 0, 0);
+
+        public void prepareCenterLocation(Location location) {
+            World world = location.getWorld();
+            if (this.height == Height.FIXED) {
+                location.setY(this.fixedHeight);
+            }
+            else if (this.height == Height.GRAVITY) {
+                location.setY(world.getHighestBlockYAt(location));
+            }
+            location.add(this.offset);
+
+            int minHeight = LocationUtils.getMinHeight(world);
+            if (location.getBlockY() < minHeight) {
+                location.setY(minHeight + 2);
+            }
+        }
+
+    }
 
     @Comment("")
     @Comment("Konfiguracja hologramu nad sercem gildii")
@@ -74,6 +110,10 @@ public class HeartConfiguration extends OkaeriConfig {
 
     @Exclude
     public File guildSchematicFile;
+
+    @Comment("")
+    @Comment("Czy gracz powinien być teleportowany do serca gildii przy jej zakładaniu.")
+    public boolean teleportToHeartOnCreate = true;
 
     @Comment("")
     @Comment("Przesunięcie domyślnego home gildii względem serca gildii")
@@ -127,11 +167,9 @@ public class HeartConfiguration extends OkaeriConfig {
     }
 
     public void loadProcessedProperties() {
-        try {
-            this.createEntityType = EntityType.valueOf(FunnyFormatter.format(this.createType.toUpperCase(Locale.ROOT), " ", "_"));
-        }
-        catch (IllegalArgumentException materialThen) {
-            this.createMaterial = MaterialUtils.parseMaterialData(this.createType, true);
+        this.createEntityType = EntityUtils.parseEntityType(this.createType, true, false);
+        if (this.createEntityType == null) {
+            this.createMaterial = MaterialUtils.parseMaterial(this.createType, true);
         }
 
         if (this.pasteSchematicOnCreation) {

@@ -5,14 +5,13 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.dzikoysk.funnyguilds.Entity.EntityType;
 import net.dzikoysk.funnyguilds.FunnyGuilds;
-import net.dzikoysk.funnyguilds.concurrency.ConcurrencyManager;
-import net.dzikoysk.funnyguilds.concurrency.requests.database.DatabaseFixAlliesRequest;
-import net.dzikoysk.funnyguilds.concurrency.requests.prefix.PrefixGlobalUpdateRequest;
 import net.dzikoysk.funnyguilds.config.PluginConfiguration;
 import net.dzikoysk.funnyguilds.data.DataModel;
 import net.dzikoysk.funnyguilds.data.flat.seralizer.FlatGuildSerializer;
 import net.dzikoysk.funnyguilds.data.flat.seralizer.FlatRegionSerializer;
 import net.dzikoysk.funnyguilds.data.flat.seralizer.FlatUserSerializer;
+import net.dzikoysk.funnyguilds.data.tasks.DatabaseFixAlliesAsyncTask;
+import net.dzikoysk.funnyguilds.feature.scoreboard.ScoreboardGlobalUpdateSyncTask;
 import net.dzikoysk.funnyguilds.guild.Guild;
 import net.dzikoysk.funnyguilds.guild.GuildManager;
 import net.dzikoysk.funnyguilds.guild.Region;
@@ -34,17 +33,14 @@ public class FlatDataModel implements DataModel {
     private final File guildsFolderFile;
     private final File regionsFolderFile;
 
-
     public FlatDataModel(FunnyGuilds plugin) {
         this.plugin = plugin;
         this.pluginConfiguration = plugin.getPluginConfiguration();
 
-        File dataFolder = plugin.getDataFolder();
+        File dataFolder = plugin.getPluginDataFolder();
         this.usersFolderFile = new File(dataFolder, "users");
         this.guildsFolderFile = new File(dataFolder, "guilds");
         this.regionsFolderFile = new File(dataFolder, "regions");
-
-        FlatPatcher.patch(plugin, this.guildsFolderFile, this.regionsFolderFile);
     }
 
     private Option<File> loadCustomFile(EntityType type, String name) {
@@ -176,8 +172,8 @@ public class FlatDataModel implements DataModel {
             FunnyGuilds.getPluginLogger().error("Guild load errors " + errors);
         }
 
-        ConcurrencyManager concurrencyManager = this.plugin.getConcurrencyManager();
-        concurrencyManager.postRequests(new DatabaseFixAlliesRequest(), new PrefixGlobalUpdateRequest(this.plugin.getIndividualPrefixManager()));
+        this.plugin.scheduleFunnyTasks(new DatabaseFixAlliesAsyncTask(guildManager));
+        this.plugin.getIndividualNameTagManager().map(ScoreboardGlobalUpdateSyncTask::new).peek(this.plugin::scheduleFunnyTasks);
 
         FunnyGuilds.getPluginLogger().info("Loaded guilds: " + guildManager.countGuilds());
     }

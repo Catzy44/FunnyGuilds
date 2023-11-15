@@ -4,6 +4,7 @@ import net.dzikoysk.funnyguilds.damage.DamageState;
 import net.dzikoysk.funnyguilds.event.FunnyEvent;
 import net.dzikoysk.funnyguilds.event.SimpleEventHandler;
 import net.dzikoysk.funnyguilds.event.rank.LogoutsChangeEvent;
+import net.dzikoysk.funnyguilds.feature.scoreboard.ScoreboardGlobalUpdateUserSyncTask;
 import net.dzikoysk.funnyguilds.user.UserCache;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -36,15 +37,21 @@ public class PlayerQuit extends AbstractFunnyListener {
                 }
             }
 
-            cache.setIndividualPrefix(null);
+            this.plugin.getIndividualNameTagManager()
+                    .map(manager -> new ScoreboardGlobalUpdateUserSyncTask(manager, user))
+                    .peek(this.plugin::scheduleFunnyTasks);
+            this.plugin.getDummyManager()
+                    .map(manager -> new ScoreboardGlobalUpdateUserSyncTask(manager, user))
+                    .peek(this.plugin::scheduleFunnyTasks);
+
+            cache.setIndividualNameTag(null);
             cache.setScoreboard(null);
             cache.setDummy(null);
             cache.setPlayerList(null);
-
             damageState.clear();
-
-            this.bossBarService.getBossBarProvider(this.funnyServer, user).removeNotification();
         });
+
+        this.messageService.playerQuit(player);
     }
 
 }

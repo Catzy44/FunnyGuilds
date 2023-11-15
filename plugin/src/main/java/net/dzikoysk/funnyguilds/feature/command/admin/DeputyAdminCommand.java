@@ -10,7 +10,6 @@ import net.dzikoysk.funnyguilds.guild.Guild;
 import net.dzikoysk.funnyguilds.shared.FunnyFormatter;
 import net.dzikoysk.funnyguilds.user.User;
 import org.bukkit.command.CommandSender;
-
 import static net.dzikoysk.funnyguilds.feature.command.DefaultValidation.when;
 
 public final class DeputyAdminCommand extends AbstractFunnyCommand {
@@ -22,35 +21,45 @@ public final class DeputyAdminCommand extends AbstractFunnyCommand {
             acceptsExceeded = true
     )
     public void execute(CommandSender sender, String[] args) {
-        when(args.length < 1, this.messages.generalNoTagGiven);
+        when(args.length < 1, config -> config.commands.validation.noTagGiven);
 
         Guild guild = GuildValidation.requireGuildByTag(args[0]);
-        when(args.length < 2, this.messages.generalNoNickGiven);
+        when(args.length < 2, config -> config.commands.validation.noNickGiven);
 
-        User userToMove = UserValidation.requireUserByName(args[1]);
-        when(!guild.isMember(userToMove), this.messages.adminUserNotMemberOf);
+        User deputyUser = UserValidation.requireUserByName(args[1]);
+        when(!guild.isMember(deputyUser), config -> config.admin.commands.validation.notMemberOf);
 
         User admin = AdminUtils.getAdminUser(sender);
-        if (!SimpleEventHandler.handle(new GuildMemberDeputyEvent(AdminUtils.getCause(admin), admin, guild, userToMove))) {
+        if (!SimpleEventHandler.handle(new GuildMemberDeputyEvent(AdminUtils.getCause(admin), admin, guild, deputyUser))) {
             return;
         }
 
-        FunnyFormatter formatter = FunnyFormatter.of("{PLAYER}", userToMove.getName());
+        FunnyFormatter formatter = FunnyFormatter.of("{PLAYER}", deputyUser.getName());
 
-        if (userToMove.isDeputy()) {
-            guild.removeDeputy(userToMove);
-            this.sendMessage(sender, this.messages.deputyRemove);
-            userToMove.sendMessage(this.messages.deputyMember);
-
-            guild.broadcast(formatter.format(this.messages.deputyNoLongerMembers));
+        if (deputyUser.isDeputy()) {
+            guild.removeDeputy(deputyUser);
+            this.messageService.getMessage(config -> config.guild.commands.deputy.removed)
+                    .receiver(sender)
+                    .send();
+            this.messageService.getMessage(config -> config.guild.commands.deputy.removedTarget)
+                    .receiver(deputyUser)
+                    .send();
+            this.messageService.getMessage(config -> config.guild.commands.deputy.removedMembers)
+                    .receiver(guild)
+                    .send();
             return;
         }
 
-        guild.addDeputy(userToMove);
-
-        this.sendMessage(sender, this.messages.deputySet);
-        userToMove.sendMessage(this.messages.deputyOwner);
-        guild.broadcast(formatter.format(this.messages.deputyMembers));
+        guild.addDeputy(deputyUser);
+        this.messageService.getMessage(config -> config.guild.commands.deputy.set)
+                .receiver(sender)
+                .send();
+        this.messageService.getMessage(config -> config.guild.commands.deputy.setTarget)
+                .receiver(deputyUser)
+                .send();
+        this.messageService.getMessage(config -> config.guild.commands.deputy.setMembers)
+                .receiver(guild)
+                .send();
     }
 
 }

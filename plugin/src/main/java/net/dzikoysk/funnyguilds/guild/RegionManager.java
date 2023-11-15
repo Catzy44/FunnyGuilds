@@ -1,12 +1,12 @@
 package net.dzikoysk.funnyguilds.guild;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import net.dzikoysk.funnyguilds.config.PluginConfiguration;
 import net.dzikoysk.funnyguilds.data.DataModel;
@@ -14,30 +14,29 @@ import net.dzikoysk.funnyguilds.data.database.SQLDataModel;
 import net.dzikoysk.funnyguilds.data.database.serializer.DatabaseRegionSerializer;
 import net.dzikoysk.funnyguilds.data.flat.FlatDataModel;
 import net.dzikoysk.funnyguilds.shared.FunnyIOUtils;
+import net.dzikoysk.funnyguilds.shared.Validate;
 import net.dzikoysk.funnyguilds.shared.bukkit.FunnyBox;
 import net.dzikoysk.funnyguilds.shared.bukkit.LocationUtils;
 import net.dzikoysk.funnyguilds.user.User;
-import org.apache.commons.lang3.Validate;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.jetbrains.annotations.ApiStatus;
 import panda.std.Option;
-import panda.std.Pair;
 import panda.std.stream.PandaStream;
 
 public class RegionManager {
 
     private final PluginConfiguration pluginConfiguration;
-    private final Map<String, Region> regionsMap = new ConcurrentHashMap<>();
+    private final Map<Long, Set<Region>> regions = new ConcurrentHashMap<>();
 
     public RegionManager(PluginConfiguration pluginConfiguration) {
         this.pluginConfiguration = pluginConfiguration;
     }
 
     public int countRegions() {
-        return this.regionsMap.size();
+        return this.getRegions().size();
     }
 
     /**
@@ -46,14 +45,16 @@ public class RegionManager {
      * @return set of regions
      */
     public Set<Region> getRegions() {
-        return new HashSet<>(this.regionsMap.values());
+        return this.regions.values().stream()
+                .flatMap(Collection::stream)
+                .collect(Collectors.toSet());
     }
 
     /**
      * Deletes all loaded regions data
      */
     public void clearRegions() {
-        this.regionsMap.clear();
+        this.regions.clear();
     }
 
     /**
@@ -64,15 +65,9 @@ public class RegionManager {
      * @return the guild
      */
     public Option<Region> findByName(String name, boolean ignoreCase) {
-        Region foundRegion = this.regionsMap.get(name);
-
-        if (foundRegion == null && ignoreCase) {
-            foundRegion = PandaStream.of(this.regionsMap.values())
-                    .find(region -> region.getName().equalsIgnoreCase(name))
-                    .orNull();
-        }
-
-        return Option.of(foundRegion);
+        return PandaStream.of(this.regions.values())
+                .flatMap(r -> r)
+                .find(region -> ignoreCase ? region.getName().equalsIgnoreCase(name) : region.getName().equals(name));
     }
 
     /**
@@ -92,7 +87,14 @@ public class RegionManager {
      * @return the region
      */
     public Option<Region> findRegionAtLocation(Location location) {
-        return PandaStream.of(this.regionsMap.values()).find(region -> region.isIn(location));
+        long packedPos = packChunkPosition(location.getBlockX() >> 4, location.getBlockZ() >> 4);
+        Set<Region> applicableRegions = this.regions.get(packedPos);
+
+        if (applicableRegions == null || applicableRegions.isEmpty()) {
+            return Option.none();
+        }
+
+        return PandaStream.of(applicableRegions).find(region -> region.isIn(location));
     }
 
     /**
@@ -117,18 +119,10 @@ public class RegionManager {
                 .isPresent();
     }
 
-    public boolean isAnyPlayerInRegion(Region region) {
-        return this.isAnyPlayerInRegion(region, Collections.emptySet());
-    }
-
     public boolean isAnyUserInRegion(Region region, Collection<User> ignoredUsers) {
         return this.isAnyPlayerInRegion(region, PandaStream.of(ignoredUsers)
                 .map(User::getUUID)
                 .collect(Collectors.toSet()));
-    }
-
-    public boolean isAnyUserInRegion(Option<Region> regionOption, Collection<User> ignoredUsers) {
-        return regionOption.map(region -> this.isAnyUserInRegion(region, ignoredUsers)).orElseGet(false);
     }
 
     /**
@@ -142,22 +136,16 @@ public class RegionManager {
             return false;
         }
 
-        int size = this.pluginConfiguration.regionSize;
-        if (this.pluginConfiguration.enlargeItems != null) {
-            size += (this.pluginConfiguration.enlargeItems.size() * this.pluginConfiguration.enlargeSize);
-        }
-
+        int size = this.pluginConfiguration.regionSize + (this.pluginConfiguration.enlargeItems.size() * this.pluginConfiguration.enlargeSize);
         int requiredDistance = (2 * size) + this.pluginConfiguration.regionMinDistance;
-        return PandaStream.of(this.regionsMap.values())
+
+        return PandaStream.of(this.regions.values())
+                .flatMap(r -> r)
                 .map(Region::getCenter)
                 .filterNot(regionCenter -> regionCenter.equals(center))
                 .filter(regionCenter -> regionCenter.getWorld().equals(center.getWorld()))
                 .find(regionCenter -> LocationUtils.flatDistance(regionCenter, center) < requiredDistance)
                 .isPresent();
-    }
-
-    public boolean isNearRegion(Option<Location> center) {
-        return center.map(this::isNearRegion).orElseGet(false);
     }
 
     /**
@@ -167,8 +155,8 @@ public class RegionManager {
      * @return if given block is guild's heart
      */
     public boolean isGuildHeart(Block block) {
-        Pair<Material, Byte> md = this.pluginConfiguration.heart.createMaterial;
-        if (md == null || block.getType() != md.getFirst()) {
+        Material heartMaterial = this.pluginConfiguration.heart.createMaterial;
+        if (heartMaterial == null || block.getType() != heartMaterial) {
             return false;
         }
 
@@ -179,23 +167,67 @@ public class RegionManager {
     }
 
     /**
-     * Add region to storage. If you think you should use this method you probably shouldn't.
+     * Add region to storage.
+     * If you think you should use this method you probably shouldn't.
      *
      * @param region region to add
      */
     public void addRegion(Region region) {
         Validate.notNull(region, "region can't be null!");
-        this.regionsMap.put(region.getName(), region);
+
+        this.forEachChunkPositionInRegion(region, (chunkX, chunkZ) -> {
+            long packedPos = packChunkPosition(chunkX, chunkZ);
+
+            Set<Region> regionsAtChunk = this.regions.computeIfAbsent(packedPos, k -> new HashSet<>());
+            regionsAtChunk.add(region);
+        });
     }
 
     /**
-     * Remove region from storage. If you think you should use this method you probably shouldn't - instead use {@link RegionManager#deleteRegion(DataModel, Region)}.
+     * Remove region from storage.
+     * If you think you should use this method you probably shouldn't - instead use {@link RegionManager#deleteRegion(DataModel, Region)}.
      *
      * @param region region to remove
      */
     public void removeRegion(Region region) {
         Validate.notNull(region, "region can't be null!");
-        this.regionsMap.remove(region.getName());
+        
+        if (!this.regionExists(region.getName())) {
+            return;
+        }
+
+        this.forEachChunkPositionInRegion(region, (chunkX, chunkZ) -> {
+            long packedPos = packChunkPosition(chunkX, chunkZ);
+
+            this.regions.computeIfPresent(packedPos, (key, set) -> {
+                set.remove(region);
+                return set;
+            });
+        });
+    }
+
+    public void moveRegionCenter(Region region, Location center) {
+        Validate.notNull(region, "region can't be null!");
+        Validate.notNull(center, "center can't be null!");
+
+        this.removeRegion(region);
+        region.setCenter(center);
+        this.addRegion(region);
+    }
+
+    public void changeRegionEnlargement(Region region, int level) {
+        Validate.notNull(region, "region can't be null!");
+        Validate.isTrue(level >= 0, "level can't be negative!");
+
+        int maxEnlargeLevel = this.pluginConfiguration.enlargeItems.size();
+        if (level > maxEnlargeLevel) {
+            level = maxEnlargeLevel;
+        }
+
+        this.removeRegion(region);
+        region.setEnlargementLevel(level);
+        region.setSize(this.pluginConfiguration.regionSize + (level * this.pluginConfiguration.enlargeSize));
+        this.addRegion(region);
     }
 
     /**
@@ -230,4 +262,31 @@ public class RegionManager {
         return this.findByName(name).isPresent();
     }
 
+    /**
+     * Calculates chunks that are in the bounds of the given region
+     * and applies given function for every chunk position.
+     */
+    private void forEachChunkPositionInRegion(Region region, BiConsumer<Integer, Integer> chunkPosFunc) {
+        int firstX = region.getFirstCorner().getBlockX() >> 4;
+        int firstZ = region.getFirstCorner().getBlockZ() >> 4;
+
+        int secondX = region.getSecondCorner().getBlockX() >> 4;
+        int secondZ = region.getSecondCorner().getBlockZ() >> 4;
+
+        int startX = Math.min(firstX, secondX);
+        int startZ = Math.min(firstZ, secondZ);
+
+        int endX = Math.max(firstX, secondX);
+        int endZ = Math.max(firstZ, secondZ);
+
+        for (int chunkX = startX; chunkX <= endX; chunkX++) {
+            for (int chunkZ = startZ; chunkZ <= endZ; chunkZ++) {
+                chunkPosFunc.accept(chunkX, chunkZ);
+            }
+        }
+    }
+
+    private static long packChunkPosition(int chunkX, int chunkZ) {
+        return (long) chunkX & 0xFFFFFFFFL | ((long) chunkZ & 0xFFFFFFFFL) << 32;
+    }
 }

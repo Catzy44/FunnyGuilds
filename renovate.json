@@ -1,0 +1,14 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:base"
+  ],
+  "ignoreDeps": [
+    "me.clip:placeholderapi",
+    "com.sk89q.worldguard:worldguard-bukkit"
+  ],
+  "schedule": [
+    "every 1 month on the first day of the month"
+  ],
+  "labels": ["Dependencies"]
+}

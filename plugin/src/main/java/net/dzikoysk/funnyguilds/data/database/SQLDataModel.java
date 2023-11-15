@@ -2,8 +2,6 @@ package net.dzikoysk.funnyguilds.data.database;
 
 import java.sql.SQLException;
 import net.dzikoysk.funnyguilds.FunnyGuilds;
-import net.dzikoysk.funnyguilds.concurrency.ConcurrencyManager;
-import net.dzikoysk.funnyguilds.concurrency.requests.prefix.PrefixGlobalUpdateRequest;
 import net.dzikoysk.funnyguilds.config.PluginConfiguration;
 import net.dzikoysk.funnyguilds.data.DataModel;
 import net.dzikoysk.funnyguilds.data.database.element.SQLBasicUtils;
@@ -12,6 +10,7 @@ import net.dzikoysk.funnyguilds.data.database.element.SQLType;
 import net.dzikoysk.funnyguilds.data.database.serializer.DatabaseGuildSerializer;
 import net.dzikoysk.funnyguilds.data.database.serializer.DatabaseRegionSerializer;
 import net.dzikoysk.funnyguilds.data.database.serializer.DatabaseUserSerializer;
+import net.dzikoysk.funnyguilds.feature.scoreboard.ScoreboardGlobalUpdateSyncTask;
 import net.dzikoysk.funnyguilds.guild.Guild;
 import net.dzikoysk.funnyguilds.guild.GuildManager;
 import net.dzikoysk.funnyguilds.guild.RegionManager;
@@ -67,7 +66,7 @@ public class SQLDataModel implements DataModel {
         this.guildsTable.add("born", SQLType.BIGINT, true);
         this.guildsTable.add("validity", SQLType.BIGINT, true);
         this.guildsTable.add("pvp", SQLType.BOOLEAN, true);
-        this.guildsTable.add("attacked", SQLType.BIGINT); //TODO: [FG 5.0] attacked -> protection
+        this.guildsTable.add("protection", SQLType.BIGINT);
         this.guildsTable.add("allies", SQLType.TEXT);
         this.guildsTable.add("enemies", SQLType.TEXT);
         this.guildsTable.add("info", SQLType.TEXT);
@@ -90,8 +89,7 @@ public class SQLDataModel implements DataModel {
         this.loadRegions();
         this.loadGuilds();
 
-        ConcurrencyManager concurrencyManager = this.plugin.getConcurrencyManager();
-        concurrencyManager.postRequests(new PrefixGlobalUpdateRequest(this.plugin.getIndividualPrefixManager()));
+        this.plugin.getIndividualNameTagManager().map(ScoreboardGlobalUpdateSyncTask::new).peek(this.plugin::scheduleFunnyTasks);
     }
 
     public void loadUsers() {

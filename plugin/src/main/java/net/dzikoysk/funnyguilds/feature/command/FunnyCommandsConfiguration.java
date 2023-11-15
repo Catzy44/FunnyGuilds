@@ -8,7 +8,6 @@ import java.util.function.Function;
 import net.dzikoysk.funnycommands.FunnyCommands;
 import net.dzikoysk.funnycommands.resources.types.PlayerType;
 import net.dzikoysk.funnyguilds.FunnyGuilds;
-import net.dzikoysk.funnyguilds.config.MessageConfiguration;
 import net.dzikoysk.funnyguilds.config.PluginConfiguration;
 import net.dzikoysk.funnyguilds.config.sections.CommandsConfiguration;
 import net.dzikoysk.funnyguilds.feature.command.admin.AddCommand;
@@ -62,6 +61,7 @@ import net.dzikoysk.funnyguilds.feature.command.user.TntCommand;
 import net.dzikoysk.funnyguilds.feature.command.user.TopCommand;
 import net.dzikoysk.funnyguilds.feature.command.user.ValidityCommand;
 import net.dzikoysk.funnyguilds.feature.command.user.WarCommand;
+import net.dzikoysk.funnyguilds.feature.command.user.HelpRequestCommand;
 import net.dzikoysk.funnyguilds.guild.GuildManager;
 import net.dzikoysk.funnyguilds.user.UserManager;
 import org.bukkit.Server;
@@ -76,11 +76,10 @@ public final class FunnyCommandsConfiguration {
         Server server = plugin.getServer();
 
         PluginConfiguration config = plugin.getPluginConfiguration();
-        MessageConfiguration messages = plugin.getMessageConfiguration();
 
         CommandsConfiguration commands = config.commands;
         CommandsConfiguration.FunnyCommand enlargeCommand = commands.enlarge;
-        enlargeCommand.enabled = enlargeCommand.enabled && config.enlargeEnable;
+        enlargeCommand.enabled = enlargeCommand.enabled && !config.enlargeItems.isEmpty();
 
         UserManager userManager = plugin.getUserManager();
         GuildManager guildManager = plugin.getGuildManager();
@@ -113,7 +112,8 @@ public final class FunnyCommandsConfiguration {
                 .command("top", commands.top, TopCommand.class)
                 .command("validity", commands.validity, ValidityCommand.class)
                 .command("war", commands.war, WarCommand.class)
-                .command("tnt", commands.tnt, TntCommand.class);
+                .command("tnt", commands.tnt, TntCommand.class)
+                .command("helprequest", commands.helpRequest, HelpRequestCommand.class);
 
         CommandComponents adminCommands = new CommandComponents("admin")
                 .command("add", commands.admin.add, AddCommand.class)
@@ -123,7 +123,7 @@ public final class FunnyCommandsConfiguration {
                 .command("deaths", commands.admin.deaths, DeathsCommand.class)
                 .command("delete", commands.admin.delete, DeleteAdminCommand.class)
                 .command("deputy", commands.admin.deputy, DeputyAdminCommand.class)
-                .command("guilds-enabled", commands.admin.enabled, GuildsEnabledCommand.class)
+                .command("guilds-enabled", commands.admin.status, GuildsEnabledCommand.class)
                 .command("kick", commands.admin.kick, KickAdminCommand.class)
                 .command("kills", commands.admin.kills, KillsCommand.class)
                 .command("leader", commands.admin.leader, LeaderAdminCommand.class)
@@ -146,18 +146,19 @@ public final class FunnyCommandsConfiguration {
                 .placeholders(adminCommands.placeholders)
                 .injector(plugin.getInjector().fork(resources -> {}))
                 .bind(new UserBind(userManager))
-                .bind(new GuildBind(messages, userManager))
+                .bind(new GuildBind(userManager))
                 .type(new PlayerType(server))
                 .completer(new MembersCompleter(userManager))
                 .completer(new GuildsCompleter(guildManager))
                 .completer(new AlliesCompleter(userManager))
                 .completer(new GuildInvitationsCompleter(userManager, plugin.getGuildInvitationList()))
                 .completer(new InvitePlayersCompleter(config, userManager))
-                .validator(new MemberValidator(messages))
-                .validator(new ManageValidator(messages))
-                .validator(new OwnerValidator(messages))
+                .validator(new MemberValidator())
+                .validator(new ManageValidator())
+                .validator(new OwnerValidator())
                 .commands(userCommands.commands)
                 .commands(adminCommands.commands)
+                .exceptionHandler(new InternalValidationExceptionHandler(plugin.getMessageService()))
                 .exceptionHandler(new FunnyGuildsExceptionHandler(FunnyGuilds.getPluginLogger()))
                 .install();
     }

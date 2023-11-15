@@ -16,7 +16,13 @@ public final class SpyCommand extends AbstractFunnyCommand {
     )
     public void execute(CommandSender sender) {
         UserCache userCache = UserValidation.requireUserByName(sender.getName()).getCache();
-        this.sendMessage(sender, userCache.toggleSpy() ? this.messages.adminStartSpy : this.messages.adminStopSpy);
+        this.messageService
+                .getMessage(config -> userCache.toggleSpy()
+                        ? config.admin.commands.guild.spy.start
+                        : config.admin.commands.guild.spy.stop
+                )
+                .receiver(sender)
+                .send();
     }
 
 }

@@ -1,16 +1,10 @@
 package net.dzikoysk.funnyguilds.user;
 
-import net.dzikoysk.funnyguilds.FunnyGuilds;
-import net.dzikoysk.funnyguilds.config.PluginConfiguration;
-import net.dzikoysk.funnyguilds.damage.DamageState;
-import net.dzikoysk.funnyguilds.feature.prefix.Dummy;
-import net.dzikoysk.funnyguilds.feature.prefix.IndividualPrefix;
+import net.dzikoysk.funnyguilds.feature.scoreboard.dummy.Dummy;
+import net.dzikoysk.funnyguilds.feature.scoreboard.nametag.IndividualNameTag;
 import net.dzikoysk.funnyguilds.feature.tablist.IndividualPlayerList;
-import org.bukkit.Bukkit;
-import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.scoreboard.Scoreboard;
-import org.bukkit.scoreboard.ScoreboardManager;
 import org.jetbrains.annotations.Nullable;
 import panda.std.Option;
 
@@ -19,22 +13,16 @@ public class UserCache {
     private final User user;
 
     private IndividualPlayerList playerList;
-    private Scoreboard scoreboard;
-    private Option<IndividualPrefix> prefix = Option.none();
-    private Dummy dummy;
+    private Option<Scoreboard> scoreboard = Option.none();
+    private Option<IndividualNameTag> nameTag = Option.none();
+    private Option<Dummy> dummy = Option.none();
 
     private BukkitTask teleportation;
     private long notificationTime;
-    private boolean enter;
     private boolean spy;
 
     public UserCache(User user) {
         this.user = user;
-    }
-
-    @Deprecated
-    public DamageState getDamageHistory() {
-        return FunnyGuilds.getInstance().getDamageManager().getDamageState(this.user.getUUID());
     }
 
     public Option<IndividualPlayerList> getPlayerList() {
@@ -45,49 +33,28 @@ public class UserCache {
         this.playerList = playerList;
     }
 
-    public Option<IndividualPrefix> getIndividualPrefix() {
-        return this.prefix;
-    }
-
-    public void setIndividualPrefix(@Nullable IndividualPrefix prefix) {
-        this.prefix = Option.of(prefix);
-    }
-
     public synchronized Option<Scoreboard> getScoreboard() {
-        return Option.of(this.scoreboard);
+        return this.scoreboard;
     }
 
-    public void updateScoreboardIfNull(Player player) {
-        if (this.scoreboard != null) {
-            return;
-        }
-
-        PluginConfiguration config = FunnyGuilds.getInstance().getPluginConfiguration();
-        if (config.useSharedScoreboard) {
-            this.setScoreboard(player.getScoreboard());
-            return;
-        }
-
-        ScoreboardManager sbManager = Bukkit.getScoreboardManager();
-        if (sbManager != null) {
-            this.setScoreboard(sbManager.getNewScoreboard());
-        }
+    public synchronized void setScoreboard(@Nullable Scoreboard scoreboard) {
+        this.scoreboard = Option.of(scoreboard);
     }
 
-    public synchronized void setScoreboard(Scoreboard sb) {
-        this.scoreboard = sb;
+    public Option<IndividualNameTag> getIndividualNameTag() {
+        return this.nameTag;
     }
 
-    public Dummy getDummy() {
-        if (this.dummy == null) {
-            this.dummy = new Dummy(this.user);
-        }
+    public void setIndividualNameTag(@Nullable IndividualNameTag nameTag) {
+        this.nameTag = Option.of(nameTag);
+    }
 
+    public Option<Dummy> getDummy() {
         return this.dummy;
     }
 
-    public void setDummy(Dummy dummy) {
-        this.dummy = dummy;
+    public void setDummy(@Nullable Dummy dummy) {
+        this.dummy = Option.of(dummy);
     }
 
     public BukkitTask getTeleportation() {
@@ -104,14 +71,6 @@ public class UserCache {
 
     public void setNotificationTime(long notification) {
         this.notificationTime = notification;
-    }
-
-    public boolean getEnter() {
-        return this.enter;
-    }
-
-    public void setEnter(boolean enter) {
-        this.enter = enter;
     }
 
     public boolean isSpy() {
